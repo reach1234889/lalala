@@ -1266,8 +1266,7 @@ async def info(interaction: discord.interaction):
     embed.add_field(name="Bot ID", value=bot.user.id, inline=True)
     embed.add_field(name="Server Count", value=len(bot.guilds), inline=True)
     embed.add_field(name="Ping", value=f"{round(bot.latency * 1000)} ms", inline=True)
-    embed.set_footer(text="Bot created by [root@Gh.dev.exe]
-                     
+    
     await interaction.response.send_message(embed=embed)
     
     embed.add_field(name="/start <container_name>", value="Start your VPS instance", inline=True)
