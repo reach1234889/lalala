@@ -1253,22 +1253,6 @@ async def help_command(interaction: discord.Interaction):
         value="Commands available to all users:",
         inline=False
     )
-# Define the 'info' command
-@bot.tree.command(name="botinfo", description="🔥 Show bot Developer info")
-async def info(interaction: discord.interaction):
-    embed = discord.Embed(
-        title="Bot Information",
-        description="This bot provides information about itself.",
-        color=discord.Color.blue()
-    )
-    embed.add_field(name="Bot Name", value=bot.user.name, inline=True)
-    embed.add_field(name="Bot ID", value=bot.user.id, inline=True)
-    embed.add_field(name="Server Count", value=len(bot.guilds), inline=True)
-    embed.add_field(name="Ping", value=f"{round(bot.latency * 1000)} ms", inline=True)
-    embed.set_footer(text="Bot Created by root@Gh.dev.exe")
-    
-    await interaction.response.send_message(embed=embed)
-    
     embed.add_field(name="/start <container_name>", value="Start your VPS instance", inline=True)
     embed.add_field(name="/stop <container_name>", value="Stop your VPS instance", inline=True)
     embed.add_field(name="/restart <container_name>", value="Restart your VPS instance", inline=True)
