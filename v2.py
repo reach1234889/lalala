@@ -16,7 +16,7 @@ import string
 from datetime import datetime, timedelta
 from typing import Optional, Literal
 
-TOKEN = ''
+TOKEN = 'MTMzMDIxNTkwOTY5MTc1NjYyNA.GTEbXE._T7w7Z4OWrs7Ci7hA4K33YTz8KzujKS64kILgQ'
 RAM_LIMIT = '64g'
 SERVER_LIMIT = 1
 database_file = 'database.txt'
