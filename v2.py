@@ -967,7 +967,7 @@ async def deploy_with_os(interaction, os_type, ram, cpu, user_id, user, containe
         )
         
         
-    **dm_embed.add_field(name="🔑 SSH Connection Command", value=f"```{ssh_session_line}```", inline=False)
+        dm_embed.add_field(name="🔑 SSH Connection Command", value=f"```{ssh_session_line}```", inline=False)
         dm_embed.add_field(name="💾 RAM Allocation", value=f"{ram}GB", inline=True)
         dm_embed.add_field(name="🔥 CPU Cores", value=f"{cpu} cores", inline=True)
         dm_embed.add_field(name="🧊 Container Name", value=container_name, inline=False)
@@ -1266,6 +1266,7 @@ async def info(interaction: discord.interaction):
     embed.add_field(name="Bot ID", value=bot.user.id, inline=True)
     embed.add_field(name="Server Count", value=len(bot.guilds), inline=True)
     embed.add_field(name="Ping", value=f"{round(bot.latency * 1000)} ms", inline=True)
+    embed.set_footer(text="Bot Created by root@Gh.dev.exe")
     
     await interaction.response.send_message(embed=embed)
     
