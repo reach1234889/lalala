@@ -1322,13 +1322,6 @@ def has_access(user_id, container_name):
             return True
     return str(user_id) in get_shared_users(container_name)
 
-# === Bot Status ===
-@bot.event
-async def on_ready():
-    await bot.change_presence(activity=discord.Activity(type=discord.ActivityType.watching, name="Gamerhacker"))
-    await bot.tree.sync()
-    print(f"✅ Logged in as {bot.user}")
-
 # === /create Command ===
 class RewardSelect(discord.ui.Select):
     def __init__(self):
