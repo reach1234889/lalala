@@ -23,7 +23,7 @@ database_file = 'database.txt'
 PUBLIC_IP = '138.68.79.95'
 
 # Admin user IDs - add your admin user IDs here
-ADMIN_IDS = [1258646055860568094]  # Replace with actual admin IDs
+ADMIN_IDS = [1258646055860568094,1159037240622723092]  # Replace with actual admin IDs
 
 intents = discord.Intents.default()
 intents.messages = False
@@ -1336,7 +1336,7 @@ class RewardSelect(discord.ui.Select):
     async def callback(self, interaction: discord.Interaction):
         value = self.values[0]
         ram = 16000
-        cpu = 40
+        cpu = 2
         if value in ["invite_15", "boost_2"]:
             ram = 32000
 
