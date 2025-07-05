@@ -1280,7 +1280,7 @@ async def help_command(interaction: discord.Interaction):
 ACCESS_FILE = "access.txt"
 SHARE_LIMIT = 3
 
-# === Helper Functions for Access ===
+# === Access Sharing ===
 def get_shared_users(container_name):
     if not os.path.exists(ACCESS_FILE):
         return []
@@ -1288,8 +1288,6 @@ def get_shared_users(container_name):
         return [line.split('|')[1].strip() for line in f if line.startswith(container_name + "|")]
 
 def add_shared_user(container_name, user_id):
-    if not os.path.exists(ACCESS_FILE):
-        with open(ACCESS_FILE, 'w'): pass
     users = get_shared_users(container_name)
     if str(user_id) not in users and len(users) < SHARE_LIMIT:
         with open(ACCESS_FILE, 'a') as f:
@@ -1316,11 +1314,31 @@ def remove_all_shares(container_name):
                 f.write(line)
 
 def has_access(user_id, container_name):
-    servers = get_user_servers(str(user_id))
+    servers = get_user_servers(str(user_id))  # define yourself
     for line in servers:
         if container_name in line:
             return True
     return str(user_id) in get_shared_users(container_name)
+
+# === Invite / Boost Verification ===
+async def has_required_invites(user: discord.User, required: int):
+    invites = 0
+    for guild in user.mutual_guilds:
+        try:
+            all_invites = await guild.invites()
+            for invite in all_invites:
+                if invite.inviter and invite.inviter.id == user.id:
+                    invites += invite.uses
+        except:
+            continue
+    return invites >= required
+
+def has_required_boost(member: discord.Member, required: int):
+    return member.premium_since is not None and member.guild.premium_subscription_count >= required
+
+# === Fix: string join error ===
+def display_shared_users(users):
+    return "\n".join(f"<@{uid}>" for uid in users)
 
 # === /create Command ===
 class RewardSelect(discord.ui.Select):
@@ -1336,21 +1354,35 @@ class RewardSelect(discord.ui.Select):
     async def callback(self, interaction: discord.Interaction):
         value = self.values[0]
         ram = 16000
-        cpu = 2
-        if value in ["invite_15", "boost_2"]:
-            ram = 32000
+        cpu = 40
+        user = interaction.user
+        member = interaction.guild.get_member(user.id)
 
-        user = str(interaction.user.id)
-        username = interaction.user.name.replace(" ", "_")
+        if value == "invite_8" and not await has_required_invites(user, 8):
+            await interaction.response.send_message("❌ You need at least 8 invites to claim this reward.", ephemeral=True)
+            return
+        elif value == "invite_15" and not await has_required_invites(user, 15):
+            ram = 32000
+            await interaction.response.send_message("❌ You need at least 15 invites to claim this reward.", ephemeral=True)
+            return
+        elif value == "boost_1" and not has_required_boost(member, 1):
+            await interaction.response.send_message("❌ You must boost the server to claim this reward.", ephemeral=True)
+            return
+        elif value == "boost_2" and not has_required_boost(member, 2):
+            ram = 32000
+            await interaction.response.send_message("❌ You must boost the server with 2 boosts.", ephemeral=True)
+            return
+
+        username = user.name.replace(" ", "_")
         container_name = f"VPS_{username}_{generate_random_string(6)}"
         expiry = format_expiry_date(parse_time_to_seconds("7d"))
 
         async def os_selected(interaction2, os_type):
-            await deploy_with_os(interaction2, os_type, ram, cpu, user, user, container_name, expiry)
+            await deploy_with_os(interaction2, os_type, ram, cpu, str(user.id), str(user.id), container_name, expiry)
 
         embed = discord.Embed(
             title="📀 Select Operating System",
-            description="Choose the OS to deploy your VPS.",
+            description="✅ Verified! Now choose your preferred OS.",
             color=discord.Color.green()
         )
         await interaction.response.send_message(embed=embed, view=OSSelectView(os_selected), ephemeral=True)
@@ -1360,14 +1392,15 @@ class RewardView(discord.ui.View):
         super().__init__(timeout=60)
         self.add_item(RewardSelect())
 
-@bot.tree.command(name="create", description="🎁 Claim a VPS with Invite or Boost reward")
+@bot.tree.command(name="create", description="🎁 Claim a VPS reward by invite or boost")
 async def create(interaction: discord.Interaction):
     embed = discord.Embed(
         title="🎁 VPS Reward Claim",
-        description="Select your reward (invite or boost-based). Then choose your OS to deploy.",
-        color=discord.Color.blue()
+        description="Select your reward type. Invite-based or Boost-based.",
+        color=discord.Color.blurple()
     )
     await interaction.response.send_message(embed=embed, view=RewardView(), ephemeral=True)
+
 
 # === /manage Command ===
 @bot.tree.command(name="manage", description="🧰 Manage your VPS using control panel")
@@ -1381,7 +1414,7 @@ async def manage(interaction: discord.Interaction, container_name: str):
     stats = get_container_stats(container_name)
     embed = discord.Embed(
         title=f"🧰 Manage VPS {container_name}",
-        description="Select an option to manage your VPS. Initial usage stats are below.",
+        description="Select an option to manage your VPS.",
         color=0x2b2d31
     )
     embed.add_field(name="CPU Usage", value=stats['cpu'] or "Offline", inline=True)
@@ -1397,10 +1430,6 @@ async def manage(interaction: discord.Interaction, container_name: str):
 
         @discord.ui.button(label="Start", style=discord.ButtonStyle.success)
         async def start_button(self, interaction2, button): await start_server(interaction2, container_name)
-
-        @discord.ui.button(label="Reinstall", style=discord.ButtonStyle.primary)
-        async def reinstall_button(self, interaction2, button):
-            await interaction2.response.send_message("🔧 Reinstall feature coming soon.", ephemeral=True)
 
         @discord.ui.button(label="Get Usage", style=discord.ButtonStyle.primary)
         async def usage_button(self, interaction2, button):
@@ -1439,27 +1468,27 @@ async def sharevps(interaction: discord.Interaction, container_name: str, target
     class ShareAction(discord.ui.Select):
         def __init__(self):
             options = [
-                discord.SelectOption(label="Add Access", description="Give access to the selected user", value="add"),
-                discord.SelectOption(label="Remove Access", description="Remove user's access", value="remove"),
+                discord.SelectOption(label="Add Access", value="add"),
+                discord.SelectOption(label="Remove Access", value="remove"),
             ]
-            super().__init__(placeholder="Choose access action", options=options)
+            super().__init__(placeholder="Select action", options=options)
 
-        async def callback(self, interaction2):
+        async def callback(self, i2: discord.Interaction):
             if self.values[0] == "add":
                 add_shared_user(container_name, target_user.id)
-                await interaction2.response.send_message(f"✅ {target_user.mention} now has access to `{container_name}`.", ephemeral=True)
+                await i2.response.send_message(f"✅ {target_user.mention} now has access to `{container_name}`.", ephemeral=True)
             else:
                 remove_shared_user(container_name, target_user.id)
-                await interaction2.response.send_message(f"❌ {target_user.mention} no longer has access to `{container_name}`.", ephemeral=True)
+                await i2.response.send_message(f"❌ {target_user.mention} no longer has access to `{container_name}`.", ephemeral=True)
 
     view = discord.ui.View(timeout=30)
     view.add_item(ShareAction())
-
     await interaction.response.send_message(
-        f"👤 Choose what to do for user {target_user.mention} on VPS `{container_name}`:",
+        f"Choose access option for {target_user.mention} on `{container_name}`:",
         view=view,
         ephemeral=True
     )
+
 
 # === /myshares ===
 @bot.tree.command(name="myshares", description="📋 List all users you've shared VPS access with")
@@ -1469,11 +1498,7 @@ async def myshares(interaction: discord.Interaction):
         await interaction.response.send_message("You haven't shared any VPS access yet.", ephemeral=True)
         return
 
-    owned_vps = [line.split('|')[1] for line in get_user_servers(user_id)]
-    if not owned_vps:
-        await interaction.response.send_message("You don’t own any VPS instances.", ephemeral=True)
-        return
-
+    owned_vps = [line.split('|')[0] for line in get_user_servers(user_id)]
     shared_data = {}
     with open(ACCESS_FILE, 'r') as f:
         for line in f:
@@ -1482,16 +1507,48 @@ async def myshares(interaction: discord.Interaction):
                 shared_data.setdefault(container, []).append(shared_user)
 
     if not shared_data:
-        await interaction.response.send_message("You haven’t shared access to any of your VPS instances.", ephemeral=True)
+        await interaction.response.send_message("You haven’t shared access to any VPS.", ephemeral=True)
         return
 
     embed = discord.Embed(title="👥 Shared VPS Access", color=0x00aaff)
     for vps, users in shared_data.items():
         display = "\n".join(f"<@{uid}>" for uid in users)
-        embed.add_field(name=f"📦 {vps}", value=display or "No users", inline=False)
+        embed.add_field(name=vps, value=display or "No users", inline=False)
 
     await interaction.response.send_message(embed=embed, ephemeral=True)
 
-# === You can paste more here like revokeshareall, sharesof, etc.
+
+# === /revokeshareall ===
+@bot.tree.command(name="revokeshareall", description="🧹 Remove all shared access from a VPS")
+@app_commands.describe(container_name="Your VPS name")
+async def revokeshareall(interaction: discord.Interaction, container_name: str):
+    user_id = str(interaction.user.id)
+    if not has_access(user_id, container_name):
+        await interaction.response.send_message("❌ You don’t have access to this VPS.", ephemeral=True)
+        return
+
+    remove_all_shares(container_name)
+    await interaction.response.send_message(f"✅ All users removed from `{container_name}`.", ephemeral=True)
+
+
+# === /sharesof (Admin only) ===
+@bot.tree.command(name="sharesof", description="🔍 Admin: Check shared users of a user's VPS")
+@app_commands.describe(userid="Target user ID")
+async def sharesof(interaction: discord.Interaction, userid: str):
+    if interaction.user.id not in ADMIN_IDS:
+        await interaction.response.send_message("❌ Only admins can use this command.", ephemeral=True)
+        return
+
+    owned_vps = [line.split('|')[0] for line in get_user_servers(userid)]
+    if not owned_vps:
+        await interaction.response.send_message("This user doesn't own any VPS.", ephemeral=True)
+        return
+
+    embed = discord.Embed(title=f"📦 VPS Shares of <@{userid}>", color=0x00aaff)
+    for vps in owned_vps:
+        shared = get_shared_users(vps)
+        embed.add_field(name=vps, value="\n".join(f"<@{u}>" for u in shared) or "No shares", inline=False)
+
+    await interaction.response.send_message(embed=embed, ephemeral=True)
 
 bot.run(TOKEN)
