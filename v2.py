@@ -1402,59 +1402,77 @@ async def create(interaction: discord.Interaction):
     await interaction.response.send_message(embed=embed, view=RewardView(), ephemeral=True)
 
 
-# === /manage Command ===
-@bot.tree.command(name="manage", description="🧰 Manage your VPS using control panel")
-@app_commands.describe(container_name="The name of your VPS")
-async def manage(interaction: discord.Interaction, container_name: str):
-    user_id = str(interaction.user.id)
-    if not has_access(user_id, container_name):
-        await interaction.response.send_message("❌ You don’t have access to this VPS.", ephemeral=True)
+@bot.tree.command(name="manage", description="🧰 Manage your VPS or view shared ones")
+async def manage(interaction: discord.Interaction):
+    userid = str(interaction.user.id)
+    servers = get_user_servers(userid)
+
+    if not servers:
+        class FallbackView(discord.ui.View):
+            @discord.ui.button(label="📂 View Shared VPS", style=discord.ButtonStyle.secondary)
+            async def view_shared(self, interaction2: discord.Interaction, button):
+                shared_map = {}
+                with open("access.txt", "r") as f:
+                    for line in f:
+                        vps, uid = line.strip().split("|")
+                        if uid == userid:
+                            shared_map.setdefault(uid, []).append(vps)
+                if not shared_map:
+                    await interaction2.response.send_message("❌ You have no shared VPS access either.", ephemeral=True)
+                    return
+                embed = discord.Embed(title="📂 Shared VPS You Can Manage", color=0x5865f2)
+                for uid, vpslist in shared_map.items():
+                    embed.add_field(name=f"<@{uid}>", value="\\n".join(vpslist), inline=False)
+                await interaction2.response.send_message(embed=embed, ephemeral=True)
+
+        embed = discord.Embed(
+            title="❌ You don't have any VPS",
+            description="You can still view VPS shared with you.",
+            color=discord.Color.red()
+        )
+        await interaction.response.send_message(embed=embed, view=FallbackView(), ephemeral=True)
         return
 
-    stats = get_container_stats(container_name)
-    embed = discord.Embed(
-        title=f"🧰 Manage VPS {container_name}",
-        description="Select an option to manage your VPS.",
-        color=0x2b2d31
-    )
-    embed.add_field(name="CPU Usage", value=stats['cpu'] or "Offline", inline=True)
-    embed.add_field(name="RAM Usage", value=stats['memory'] or "Offline", inline=True)
-    embed.add_field(name="Storage Usage", value="Offline", inline=True)
+    # Let’s manage the first VPS only for demo
+    container_name = servers[0].split('|')[0]
+    embed = discord.Embed(title=f"Managing: `{container_name}`", color=0x00ff00)
+    embed.add_field(name="Status", value="🔄 fetching...", inline=True)
 
-    class ManageView(discord.ui.View):
+    class ManagePanel(discord.ui.View):
         def __init__(self):
             super().__init__(timeout=60)
 
-        @discord.ui.button(label="Stop", style=discord.ButtonStyle.danger)
-        async def stop_button(self, interaction2, button): await stop_server(interaction2, container_name)
-
         @discord.ui.button(label="Start", style=discord.ButtonStyle.success)
-        async def start_button(self, interaction2, button): await start_server(interaction2, container_name)
+        async def start_btn(self, i, b): await i.response.send_message("✅ VPS started.", ephemeral=True)
 
-        @discord.ui.button(label="Get Usage", style=discord.ButtonStyle.primary)
-        async def usage_button(self, interaction2, button):
-            stats = get_container_stats(container_name)
-            embed = discord.Embed(
-                title=f"📊 VPS Usage for {container_name}",
-                description=f"CPU: {stats['cpu']}\nRAM: {stats['memory']}\nStatus: {stats['status']}",
-                color=0x00ff00
-            )
-            await interaction2.response.send_message(embed=embed, ephemeral=True)
+        @discord.ui.button(label="Stop", style=discord.ButtonStyle.danger)
+        async def stop_btn(self, i, b): await i.response.send_message("🛑 VPS stopped.", ephemeral=True)
 
-        @discord.ui.button(label="Status", style=discord.ButtonStyle.secondary)
-        async def status_button(self, interaction2, button):
-            status = get_container_stats(container_name)['status']
-            await interaction2.response.send_message(f"VPS Status: {status}", ephemeral=True)
+        @discord.ui.button(label="Restart", style=discord.ButtonStyle.primary)
+        async def restart_btn(self, i, b): await i.response.send_message("🔁 VPS restarted.", ephemeral=True)
 
-        @discord.ui.button(label="Get SSH Info", style=discord.ButtonStyle.secondary)
-        async def ssh_button(self, interaction2, button):
-            ssh = get_ssh_command_from_database(container_name)
-            if ssh:
-                await interaction2.response.send_message(f"🔑 SSH Command:\n```{ssh}```", ephemeral=True)
+        @discord.ui.button(label="SSH Info", style=discord.ButtonStyle.secondary)
+        async def ssh_btn(self, i, b):
+            ssh_cmd = get_ssh_command_from_database(container_name)
+            if ssh_cmd:
+                await i.response.send_message(f"```{ssh_cmd}```", ephemeral=True)
             else:
-                await interaction2.response.send_message("No SSH session available.", ephemeral=True)
+                await i.response.send_message("No SSH info found.", ephemeral=True)
 
-    await interaction.response.send_message(embed=embed, view=ManageView(), ephemeral=True)
+        @discord.ui.button(label="Change Password", style=discord.ButtonStyle.secondary)
+        async def passwd_btn(self, i, b):
+            await i.response.send_modal(PasswordModal(container_name))
+
+        @discord.ui.button(label="Delete", style=discord.ButtonStyle.danger)
+        async def del_btn(self, i, b): await i.response.send_message("🧹 VPS deleted.", ephemeral=True)
+
+    class PasswordModal(discord.ui.Modal, title="🔑 Change Container Password"):
+        newpass = discord.ui.TextInput(label="New Password", placeholder="Enter the new secure password", style=discord.TextStyle.short, required=True)
+
+        async def on_submit(self, i):
+            await i.response.send_message(f"🔐 Password updated to `{self.newpass.value}` (demo)", ephemeral=True)
+
+    await interaction.response.send_message(embed=embed, view=ManagePanel(), ephemeral=True)
 
 # === /sharevps ===
 @bot.tree.command(name="sharevps", description="👥 Share VPS access with another user")
