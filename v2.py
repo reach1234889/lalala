@@ -1401,7 +1401,6 @@ async def create(interaction: discord.Interaction):
     )
     await interaction.response.send_message(embed=embed, view=RewardView(), ephemeral=True)
 
-
 @bot.tree.command(name="manage", description="🧰 Manage your VPS or view shared ones")
 async def manage(interaction: discord.Interaction):
     userid = str(interaction.user.id)
@@ -1422,7 +1421,7 @@ async def manage(interaction: discord.Interaction):
                     return
                 embed = discord.Embed(title="📂 Shared VPS You Can Manage", color=0x5865f2)
                 for uid, vpslist in shared_map.items():
-                    embed.add_field(name=f"<@{uid}>", value="\\n".join(vpslist), inline=False)
+                    embed.add_field(name=f"<@{uid}>", value="\n".join(vpslist), inline=False)
                 await interaction2.response.send_message(embed=embed, ephemeral=True)
 
         embed = discord.Embed(
@@ -1433,47 +1432,17 @@ async def manage(interaction: discord.Interaction):
         await interaction.response.send_message(embed=embed, view=FallbackView(), ephemeral=True)
         return
 
-    # Let’s manage the first VPS only for demo
     container_name = servers[0].split('|')[0]
     embed = discord.Embed(title=f"Managing: `{container_name}`", color=0x00ff00)
-    embed.add_field(name="Status", value="🔄 fetching...", inline=True)
+    embed.add_field(name="Status", value="🔄 VPS is currently online/offline", inline=True)
 
-    class ManagePanel(discord.ui.View):
-        def __init__(self):
-            super().__init__(timeout=60)
-
-        @discord.ui.button(label="Start", style=discord.ButtonStyle.success)
-        async def start_btn(self, i, b): await i.response.send_message("✅ VPS started.", ephemeral=True)
-
-        @discord.ui.button(label="Stop", style=discord.ButtonStyle.danger)
-        async def stop_btn(self, i, b): await i.response.send_message("🛑 VPS stopped.", ephemeral=True)
-
-        @discord.ui.button(label="Restart", style=discord.ButtonStyle.primary)
-        async def restart_btn(self, i, b): await i.response.send_message("🔁 VPS restarted.", ephemeral=True)
-
-        @discord.ui.button(label="SSH Info", style=discord.ButtonStyle.secondary)
-        async def ssh_btn(self, i, b):
-            ssh_cmd = get_ssh_command_from_database(container_name)
-            if ssh_cmd:
-                await i.response.send_message(f"```{ssh_cmd}```", ephemeral=True)
-            else:
-                await i.response.send_message("No SSH info found.", ephemeral=True)
-
-        @discord.ui.button(label="Change Password", style=discord.ButtonStyle.secondary)
-        async def passwd_btn(self, i, b):
-            await i.response.send_modal(PasswordModal(container_name))
-
-        @discord.ui.button(label="Delete", style=discord.ButtonStyle.danger)
-        async def del_btn(self, i, b): await i.response.send_message("🧹 VPS deleted.", ephemeral=True)
-
-    class PasswordModal(discord.ui.Modal, title="🔑 Change Container Password"):
-        newpass = discord.ui.TextInput(label="New Password", placeholder="Enter the new secure password", style=discord.TextStyle.short, required=True)
+    class PasswordModal(discord.ui.Modal, title="🔑 Change VPS Password"):
+        newpass = discord.ui.TextInput(label="New Password", placeholder="Enter new password", style=discord.TextStyle.short, required=True)
 
         async def on_submit(self, i):
-            await i.response.send_message(f"🔐 Password updated to `{self.newpass.value}` (demo)", ephemeral=True)
-            
-      @discord.ui.button(label="🔁 Reinstall", style=discord.ButtonStyle.secondary)
-      async def reinstall_btn(self, i, b):
+            # Replace with real password change command
+            await i.response.send_message(f"🔐 Password changed to `{self.newpass.value}` (demo)", ephemeral=True)
+
     class OSSelect(discord.ui.Select):
         def __init__(self):
             options = [
@@ -1486,23 +1455,54 @@ async def manage(interaction: discord.Interaction):
 
         async def callback(self2, i2):
             os_choice = self2.values[0]
-            # 🧠 Replace this with actual reinstall logic
-            await i2.response.send_message(f"🔁 Reinstalling VPS with `{os_choice}`...", ephemeral=True)
+            # Replace this with your real reinstall logic
+            await i2.response.send_message(f"🔁 Reinstalling `{container_name}` with `{os_choice}`...", ephemeral=True)
 
     class OSReinstallView(discord.ui.View):
         def __init__(self):
             super().__init__()
             self.add_item(OSSelect())
 
-    await i.response.send_message("Select an OS to reinstall your VPS:", view=OSReinstallView(), ephemeral=True)
+    class ManagePanel(discord.ui.View):
+        def __init__(self):
+            super().__init__(timeout=60)
+
+        @discord.ui.button(label="✅ Start", style=discord.ButtonStyle.success)
+        async def start_btn(self, i, b):
+            os.system(f"docker start {container_name}")
+            await i.response.send_message("✅ VPS started.", ephemeral=True)
+
+        @discord.ui.button(label="🛑 Stop", style=discord.ButtonStyle.danger)
+        async def stop_btn(self, i, b):
+            os.system(f"docker stop {container_name}")
+            await i.response.send_message("🛑 VPS stopped.", ephemeral=True)
+
+        @discord.ui.button(label="🔁 Restart", style=discord.ButtonStyle.primary)
+        async def restart_btn(self, i, b):
+            os.system(f"docker restart {container_name}")
+            await i.response.send_message("🔁 VPS restarted.", ephemeral=True)
+
+        @discord.ui.button(label="💻 SSH Info", style=discord.ButtonStyle.secondary)
+        async def ssh_btn(self, i, b):
+            ssh_cmd = f"ssh user@YOUR_VPS_IP -p PORT"  # Replace with real IP/port logic
+            await i.response.send_message(f"```{ssh_cmd}```", ephemeral=True)
+
+        @discord.ui.button(label="🔑 Change Password", style=discord.ButtonStyle.secondary)
+        async def passwd_btn(self, i, b):
+            await i.response.send_modal(PasswordModal())
+
+        @discord.ui.button(label="🔁 Reinstall VPS", style=discord.ButtonStyle.secondary)
+        async def reinstall_btn(self, i, b):
+            await i.response.send_message("📀 Select an OS to reinstall your VPS:", view=OSReinstallView(), ephemeral=True)
+
+        @discord.ui.button(label="🗑️ Delete", style=discord.ButtonStyle.danger)
+        async def del_btn(self, i, b):
+            os.system(f"docker stop {container_name}")
+            os.system(f"docker rm {container_name}")
+            await i.response.send_message(f"🗑️ `{container_name}` deleted.", ephemeral=True)
 
     await interaction.response.send_message(embed=embed, view=ManagePanel(), ephemeral=True)
 
-# === /sharevps ===
-@bot.tree.command(name="sharevps", description="👥 Share VPS access with another user")
-@app_commands.describe(container_name="Your VPS name", target_user="User to share/revoke access")
-async def sharevps(interaction: discord.Interaction, container_name: str, target_user: discord.User):
-    user_id = str(interaction.user.id)
     if not has_access(user_id, container_name):
         await interaction.response.send_message("❌ You don’t have access to this VPS.", ephemeral=True)
         return
