@@ -1471,6 +1471,30 @@ async def manage(interaction: discord.Interaction):
 
         async def on_submit(self, i):
             await i.response.send_message(f"🔐 Password updated to `{self.newpass.value}` (demo)", ephemeral=True)
+            
+      @discord.ui.button(label="🔁 Reinstall", style=discord.ButtonStyle.secondary)
+      async def reinstall_btn(self, i, b):
+    class OSSelect(discord.ui.Select):
+        def __init__(self):
+            options = [
+                discord.SelectOption(label="Ubuntu 22.04", value="ubuntu-22.04"),
+                discord.SelectOption(label="Ubuntu 20.04", value="ubuntu-20.04"),
+                discord.SelectOption(label="Debian 12", value="debian-12"),
+                discord.SelectOption(label="Debian 11", value="debian-11"),
+            ]
+            super().__init__(placeholder="📀 Choose OS to reinstall", options=options)
+
+        async def callback(self2, i2):
+            os_choice = self2.values[0]
+            # 🧠 Replace this with actual reinstall logic
+            await i2.response.send_message(f"🔁 Reinstalling VPS with `{os_choice}`...", ephemeral=True)
+
+    class OSReinstallView(discord.ui.View):
+        def __init__(self):
+            super().__init__()
+            self.add_item(OSSelect())
+
+    await i.response.send_message("Select an OS to reinstall your VPS:", view=OSReinstallView(), ephemeral=True)
 
     await interaction.response.send_message(embed=embed, view=ManagePanel(), ephemeral=True)
 
@@ -1568,5 +1592,44 @@ async def sharesof(interaction: discord.Interaction, userid: str):
         embed.add_field(name=vps, value="\n".join(f"<@{u}>" for u in shared) or "No shares", inline=False)
 
     await interaction.response.send_message(embed=embed, ephemeral=True)
+
+@bot.tree.command(name="suspendvps", description="❌ Admin: Suspend all VPS of a user")
+@app_commands.describe(usertag="The user whose VPS you want to suspend")
+async def suspendvps(interaction: discord.Interaction, usertag: discord.User):
+    if interaction.user.id not in ADMIN_IDS:
+        await interaction.response.send_message("❌ Only admins can use this command.", ephemeral=True)
+        return
+
+    user_id = str(usertag.id)
+    containers = [line.split('|')[0] for line in get_user_servers(user_id)]
+
+    if not containers:
+        await interaction.response.send_message("⚠️ No VPS found for that user.", ephemeral=True)
+        return
+
+    for container in containers:
+        os.system(f"docker pause {container}")
+
+    await interaction.response.send_message(f"⛔ Suspended VPS: `{', '.join(containers)}`", ephemeral=True)
+
+
+@bot.tree.command(name="unsuspendvps", description="✅ Admin: Unsuspend all VPS of a user")
+@app_commands.describe(usertag="The user whose VPS you want to unsuspend")
+async def unsuspendvps(interaction: discord.Interaction, usertag: discord.User):
+    if interaction.user.id not in ADMIN_IDS:
+        await interaction.response.send_message("❌ Only admins can use this command.", ephemeral=True)
+        return
+
+    user_id = str(usertag.id)
+    containers = [line.split('|')[0] for line in get_user_servers(user_id)]
+
+    if not containers:
+        await interaction.response.send_message("⚠️ No VPS found for that user.", ephemeral=True)
+        return
+
+    for container in containers:
+        os.system(f"docker unpause {container}")
+
+    await interaction.response.send_message(f"✅ Unsuspended VPS: `{', '.join(containers)}`", ephemeral=True)
 
 bot.run(TOKEN)
