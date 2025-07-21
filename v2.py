@@ -1503,35 +1503,6 @@ async def manage(interaction: discord.Interaction):
 
     await interaction.response.send_message(embed=embed, view=ManagePanel(), ephemeral=True)
 
-    if not has_access(user_id, container_name):
-        await interaction.response.send_message("❌ You don’t have access to this VPS.", ephemeral=True)
-        return
-
-    class ShareAction(discord.ui.Select):
-        def __init__(self):
-            options = [
-                discord.SelectOption(label="Add Access", value="add"),
-                discord.SelectOption(label="Remove Access", value="remove"),
-            ]
-            super().__init__(placeholder="Select action", options=options)
-
-        async def callback(self, i2: discord.Interaction):
-            if self.values[0] == "add":
-                add_shared_user(container_name, target_user.id)
-                await i2.response.send_message(f"✅ {target_user.mention} now has access to `{container_name}`.", ephemeral=True)
-            else:
-                remove_shared_user(container_name, target_user.id)
-                await i2.response.send_message(f"❌ {target_user.mention} no longer has access to `{container_name}`.", ephemeral=True)
-
-    view = discord.ui.View(timeout=30)
-    view.add_item(ShareAction())
-    await interaction.response.send_message(
-        f"Choose access option for {target_user.mention} on `{container_name}`:",
-        view=view,
-        ephemeral=True
-    )
-
-
 # === /myshares ===
 @bot.tree.command(name="myshares", description="📋 List all users you've shared VPS access with")
 async def myshares(interaction: discord.Interaction):
