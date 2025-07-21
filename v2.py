@@ -1632,4 +1632,47 @@ async def unsuspendvps(interaction: discord.Interaction, usertag: discord.User):
 
     await interaction.response.send_message(f"✅ Unsuspended VPS: `{', '.join(containers)}`", ephemeral=True)
 
+@bot.tree.command(name="send_vps", description="📦 Admin: Send VPS info to a user via DM")
+@app_commands.describe(
+    usertag="The user to send VPS to",
+    username="Username for SSH",
+    sshpass="SSH Password",
+    port="Port number",
+    fullssh="Full SSH command",
+    passw="Display password again"
+)
+async def send_vps(
+    interaction: discord.Interaction,
+    usertag: discord.User,
+    username: str,
+    sshpass: str,
+    port: str,
+    fullssh: str,
+    passw: str
+):
+    if interaction.user.id not in ADMIN_IDS:
+        await interaction.response.send_message("❌ Only admins can use this command.", ephemeral=True)
+        return
+
+    embed = discord.Embed(
+        title="🔐 VPS Credentials",
+        description="Here are your VPS details",
+        color=0x2f3136
+    )
+    embed.set_thumbnail(url="https://www.imghippo.com/i/PXAV9041Yyw.png")
+    embed.set_image(url="https://www.imghippo.com/i/bRzC6045UZ.png")
+    embed.add_field(name="👤 Username", value=username, inline=True)
+    embed.add_field(name="🔑 Password", value=sshpass, inline=True)
+    embed.add_field(name="📦 Port", value=port, inline=True)
+    embed.add_field(name="📋 Full SSH", value=f"```{fullssh}```", inline=False)
+    embed.add_field(name="🔐 Confirm Password", value=passw, inline=False)
+    embed.set_footer(text="DragonCloud VPS", icon_url="https://i.imgur.com/AfFp7pu.png")
+
+    try:
+        await usertag.send(embed=embed)
+        await interaction.response.send_message(f"✅ VPS info sent to {usertag.mention}", ephemeral=True)
+    except:
+        await interaction.response.send_message("❌ Could not DM the user.", ephemeral=True)
+
+
 bot.run(TOKEN)
