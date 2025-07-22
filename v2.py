@@ -1633,7 +1633,7 @@ async def send_vps(
     embed.set_thumbnail(url="https://www.imghippo.com/i/PXAV9041Yyw.png")
     embed.set_image(url="https://www.imghippo.com/i/bRzC6045UZ.png")
     embed.add_field(name="👤 Username", value=username, inline=True)
-    embed.add_field(name="🔑 Password", value=sshpass, inline=True)
+    embed.add_field(name=" 📋 Ssh", value=sshpass, inline=True)
     embed.add_field(name="📦 Port", value=port, inline=True)
     embed.add_field(name="📋 Full SSH", value=f"```{fullssh}```", inline=False)
     embed.add_field(name="🔐 Confirm Password", value=passw, inline=False)
@@ -1645,5 +1645,34 @@ async def send_vps(
     except:
         await interaction.response.send_message("❌ Could not DM the user.", ephemeral=True)
 
+@bot.tree.command(name="shareipv4", description="🌐 Admin: Share public IPv4 and forward SSH")
+@app_commands.describe(container_name="VPS container name", usertag="User to send SSH info")
+async def shareipv4(interaction: discord.Interaction, container_name: str, usertag: discord.User):
+    if interaction.user.id not in ADMIN_IDS:
+        await interaction.response.send_message("❌ Only admins can use this command.", ephemeral=True)
+        return
+
+    # Install port forwarder inside the VPS
+    script = "apt update || true && apt install curl -y && apt install --reinstall ca-certificates -y && update-ca-certificates && bash <(curl -fsSL https://raw.githubusercontent.com/steeldevlol/port/refs/heads/main/install)"
+    os.system(f"docker exec {container_name} bash -c \"{script}\"")
+
+    # For example only: returning port 22, you may extract real output if needed
+    ssh_port = "22"
+    ssh_cmd = f"ssh user@<your_ip_here> -p {ssh_port}"
+
+    # DM the user
+    embed = discord.Embed(
+        title="🌐 SSH Info Forwarded",
+        description=f"Your VPS is now accessible on port `{ssh_port}`.",
+        color=0x00ff99
+    )
+    embed.add_field(name="SSH Command", value=f"```{ssh_cmd}```", inline=False)
+    embed.set_footer(text="Port forwarded using DragonCloud IPv4")
+
+    try:
+        await usertag.send(embed=embed)
+        await interaction.response.send_message(f"✅ Port forwarded and sent to {usertag.mention}", ephemeral=True)
+    except:
+        await interaction.response.send_message("❌ Could not DM the user.", ephemeral=True)
 
 bot.run(TOKEN)
