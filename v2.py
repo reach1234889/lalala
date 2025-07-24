@@ -1401,107 +1401,119 @@ async def create(interaction: discord.Interaction):
     )
     await interaction.response.send_message(embed=embed, view=RewardView(), ephemeral=True)
 
-@bot.tree.command(name="manage", description="🧰 Manage your VPS or view shared ones")
+@bot.tree.command(name="manage", description="🧰 Manage your VPS or shared ones")
 async def manage(interaction: discord.Interaction):
     userid = str(interaction.user.id)
+
     servers = get_user_servers(userid)
+    shared = []
 
-    if not servers:
-        class FallbackView(discord.ui.View):
-            @discord.ui.button(label="📂 View Shared VPS", style=discord.ButtonStyle.secondary)
-            async def view_shared(self, interaction2: discord.Interaction, button):
-                shared_map = {}
-                with open("access.txt", "r") as f:
-                    for line in f:
-                        vps, uid = line.strip().split("|")
-                        if uid == userid:
-                            shared_map.setdefault(uid, []).append(vps)
-                if not shared_map:
-                    await interaction2.response.send_message("❌ You have no shared VPS access either.", ephemeral=True)
-                    return
-                embed = discord.Embed(title="📂 Shared VPS You Can Manage", color=0x5865f2)
-                for uid, vpslist in shared_map.items():
-                    embed.add_field(name=f"<@{uid}>", value="\n".join(vpslist), inline=False)
-                await interaction2.response.send_message(embed=embed, ephemeral=True)
+    with open("access.txt", "r") as f:
+        for line in f:
+            vps, uid = line.strip().split("|")
+            if uid == userid:
+                shared.append(vps)
 
-        embed = discord.Embed(
-            title="❌ You don't have any VPS",
-            description="You can still view VPS shared with you.",
-            color=discord.Color.red()
-        )
-        await interaction.response.send_message(embed=embed, view=FallbackView(), ephemeral=True)
-        return
+    if not servers and not shared:
+        return await interaction.response.send_message("❌ You have no VPS or shared access.", ephemeral=True)
 
-    container_name = servers[0].split('|')[0]
-    embed = discord.Embed(title=f"Managing: `{container_name}`", color=0x00ff00)
-    embed.add_field(name="Status", value="🔄 VPS is currently online/offline", inline=True)
+    all_vps = servers + shared
+    container_name = all_vps[0].split('|')[0] if '|' in all_vps[0] else all_vps[0]
 
-    class PasswordModal(discord.ui.Modal, title="🔑 Change VPS Password"):
-        newpass = discord.ui.TextInput(label="New Password", placeholder="Enter new password", style=discord.TextStyle.short, required=True)
+    # VPS status
+    running = os.popen(f"docker inspect -f '{{{{.State.Running}}}}' {container_name}").read().strip()
+    status = "🟢 Online" if running == "true" else "🔴 Offline"
+    color = 0x2ecc71 if running == "true" else 0xe74c3c
 
-        async def on_submit(self, i):
-            # Replace with real password change command
-            await i.response.send_message(f"🔐 Password changed to `{self.newpass.value}` (demo)", ephemeral=True)
+    embed = discord.Embed(
+        title=f"🖥️ Managing VPS: `{container_name}`",
+        description=f"**Status:** {status}",
+        color=color
+    )
+    embed.set_image(url="https://www.imghippo.com/i/bRzC6045UZ.png")
+    embed.set_thumbnail(url="https://www.imghippo.com/i/PXAV9041Yyw.png")
+
+    class CmdModal(discord.ui.Modal, title="📥 Run Command on VPS"):
+        command = discord.ui.TextInput(label="Enter your command", style=discord.TextStyle.paragraph)
+
+        async def on_submit(self, interaction2):
+            output = os.popen(f'docker exec {container_name} bash -c "{self.command.value}"').read()
+            output = output[:1900] + '...' if len(output) > 1900 else output
+            await interaction2.response.send_message(f"📤 Output:\n```{output}```", ephemeral=True)
 
     class OSSelect(discord.ui.Select):
         def __init__(self):
-            options = [
+            super().__init__(placeholder="📀 Select OS to reinstall", options=[
                 discord.SelectOption(label="Ubuntu 22.04", value="ubuntu-22.04"),
                 discord.SelectOption(label="Ubuntu 20.04", value="ubuntu-20.04"),
                 discord.SelectOption(label="Debian 12", value="debian-12"),
-                discord.SelectOption(label="Debian 11", value="debian-11"),
-            ]
-            super().__init__(placeholder="📀 Choose OS to reinstall", options=options)
+                discord.SelectOption(label="Debian 11", value="debian-11")
+            ])
 
-        async def callback(self2, i2):
-            os_choice = self2.values[0]
-            # Replace this with your real reinstall logic
-            await i2.response.send_message(f"🔁 Reinstalling `{container_name}` with `{os_choice}`...", ephemeral=True)
+        async def callback(self, interaction2):
+            os_choice = self.values[0]
+            # 🔁 Replace this with your reinstall logic
+            await interaction2.response.send_message(f"📀 Reinstalling with `{os_choice}` (demo only)", ephemeral=True)
 
-    class OSReinstallView(discord.ui.View):
+    class ReinstallView(discord.ui.View):
         def __init__(self):
             super().__init__()
             self.add_item(OSSelect())
 
-    class ManagePanel(discord.ui.View):
+    class ManageButtons(discord.ui.View):
         def __init__(self):
-            super().__init__(timeout=60)
+            super().__init__(timeout=None)
 
         @discord.ui.button(label="✅ Start", style=discord.ButtonStyle.success)
-        async def start_btn(self, i, b):
+        async def start(self, i, b): 
             os.system(f"docker start {container_name}")
             await i.response.send_message("✅ VPS started.", ephemeral=True)
 
         @discord.ui.button(label="🛑 Stop", style=discord.ButtonStyle.danger)
-        async def stop_btn(self, i, b):
+        async def stop(self, i, b): 
             os.system(f"docker stop {container_name}")
             await i.response.send_message("🛑 VPS stopped.", ephemeral=True)
 
         @discord.ui.button(label="🔁 Restart", style=discord.ButtonStyle.primary)
-        async def restart_btn(self, i, b):
+        async def restart(self, i, b): 
             os.system(f"docker restart {container_name}")
             await i.response.send_message("🔁 VPS restarted.", ephemeral=True)
 
-        @discord.ui.button(label="💻 SSH Info", style=discord.ButtonStyle.secondary)
-        async def ssh_btn(self, i, b):
-            ssh_cmd = f"ssh user@YOUR_VPS_IP -p PORT"  # Replace with real IP/port logic
-            await i.response.send_message(f"```{ssh_cmd}```", ephemeral=True)
+        @discord.ui.button(label="📊 Status", style=discord.ButtonStyle.secondary)
+        async def status(self, i, b): 
+            running = os.popen(f"docker inspect -f '{{{{.State.Running}}}}' {container_name}").read().strip()
+            stat = "🟢 Online" if running == "true" else "🔴 Offline"
+            await i.response.send_message(f"📶 VPS is: **{stat}**", ephemeral=True)
 
-        @discord.ui.button(label="🔑 Change Password", style=discord.ButtonStyle.secondary)
-        async def passwd_btn(self, i, b):
-            await i.response.send_modal(PasswordModal())
+        @discord.ui.button(label="🖥️ Run CMD", style=discord.ButtonStyle.secondary)
+        async def cmd(self, i, b): 
+            await i.response.send_modal(CmdModal())
 
-        @discord.ui.button(label="🔁 Reinstall VPS", style=discord.ButtonStyle.secondary)
-        async def reinstall_btn(self, i, b):
-            await i.response.send_message("📀 Select an OS to reinstall your VPS:", view=OSReinstallView(), ephemeral=True)
+        @discord.ui.button(label="🤝 Share VPS", style=discord.ButtonStyle.secondary)
+        async def share(self, i, b): 
+            await i.response.send_message("✏️ Enter user ID to share VPS with:", ephemeral=True)
 
-        @discord.ui.button(label="🗑️ Delete", style=discord.ButtonStyle.danger)
-        async def del_btn(self, i, b):
+            def check(msg): return msg.author.id == i.user.id and msg.channel == i.channel
+            try:
+                msg = await bot.wait_for("message", timeout=30, check=check)
+                uid = msg.content.strip()
+                with open("access.txt", "a") as f:
+                    f.write(f"{container_name}|{uid}\n")
+                await i.followup.send(f"✅ VPS shared with <@{uid}>.", ephemeral=True)
+            except:
+                await i.followup.send("❌ Timed out or invalid input.", ephemeral=True)
+
+        @discord.ui.button(label="🔁 Reinstall OS", style=discord.ButtonStyle.secondary)
+        async def reinstall(self, i, b): 
+            await i.response.send_message("📀 Select new OS to reinstall:", view=ReinstallView(), ephemeral=True)
+
+        @discord.ui.button(label="🗑️ Delete VPS", style=discord.ButtonStyle.danger)
+        async def delete(self, i, b): 
             os.system(f"docker stop {container_name}")
             os.system(f"docker rm {container_name}")
             await i.response.send_message(f"🗑️ `{container_name}` deleted.", ephemeral=True)
 
-    await interaction.response.send_message(embed=embed, view=ManagePanel(), ephemeral=True)
+    await interaction.response.send_message(embed=embed, view=ManageButtons(), ephemeral=True)
 
 # === /myshares ===
 @bot.tree.command(name="myshares", description="📋 List all users you've shared VPS access with")
@@ -1675,4 +1687,49 @@ async def shareipv4(interaction: discord.Interaction, container_name: str, usert
     except:
         await interaction.response.send_message("❌ Could not DM the user.", ephemeral=True)
 
+@bot.tree.command(name="shareipv4", description="🌐 Admin: Setup port forward in VPS and DM SSH info")
+@app_commands.describe(container_name="VPS container name", usertag="User to send SSH info")
+async def shareipv4(interaction: discord.Interaction, container_name: str, usertag: discord.User):
+    if interaction.user.id not in ADMIN_IDS:
+        await interaction.response.send_message("❌ Only admins can use this command.", ephemeral=True)
+        return
+
+    await interaction.response.send_message(f"⚙️ Running port-forwarding setup inside `{container_name}`...", ephemeral=True)
+
+    # Step 1: Run the port forwarding setup and capture the output
+    try:
+        result = os.popen(
+            f'docker exec {container_name} bash -c "apt update -y && apt install curl -y && bash <(curl -fsSL https://raw.githubusercontent.com/steeldevlol/port/refs/heads/main/install)"'
+        ).read()
+    except Exception as e:
+        await interaction.followup.send(content=f"❌ Error while setting up port forwarding:\n{e}", ephemeral=True)
+        return
+
+    # Step 2: Extract the line with forwarding info
+    import re
+    match = re.search(r"(tunnel\.steeldev\.space:\d+)", result)
+    if not match:
+        await interaction.followup.send("❌ Could not find forwarded IP and port in response.", ephemeral=True)
+        return
+
+    ip_port = match.group(1)
+    ssh_cmd = f"ssh user@{ip_port.replace(':', ' -p ')}"
+
+    # Step 3: Send to user
+    embed = discord.Embed(
+        title="🌐 SSH Port Forwarded",
+        description=f"Your VPS is accessible now at `{ip_port}`",
+        color=0x00ffcc
+    )
+    embed.set_thumbnail(url="https://www.imghippo.com/i/PXAV9041Yyw.png")
+    embed.set_image(url="https://www.imghippo.com/i/bRzC6045UZ.png")
+    embed.add_field(name="SSH Command", value=f"```{ssh_cmd}```", inline=False)
+    embed.set_footer(text="DragonCloud • Secure IPv4 Access")
+
+    try:
+        await usertag.send(embed=embed)
+        await interaction.followup.send(f"✅ Port `{ip_port}` forwarded and DM sent to {usertag.mention}", ephemeral=True)
+    except:
+        await interaction.followup.send("❌ Could not DM the user.", ephemeral=True)
+        
 bot.run(TOKEN)
