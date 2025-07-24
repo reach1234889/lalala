@@ -1629,7 +1629,7 @@ async def unsuspendvps(interaction: discord.Interaction, usertag: discord.User):
 @app_commands.describe(
     usertag="The user to send VPS to",
     username="Username for SSH",
-    sshpass="SSH Password",
+    ssh="SSH",
     port="Port number",
     fullssh="Full SSH command",
     passw="Display password again"
@@ -1638,7 +1638,7 @@ async def send_vps(
     interaction: discord.Interaction,
     usertag: discord.User,
     username: str,
-    sshpass: str,
+    ssh: str,
     port: str,
     fullssh: str,
     passw: str
@@ -1655,7 +1655,7 @@ async def send_vps(
     embed.set_thumbnail(url="https://www.imghippo.com/i/PXAV9041Yyw.png")
     embed.set_image(url="https://www.imghippo.com/i/bRzC6045UZ.png")
     embed.add_field(name="👤 Username", value=username, inline=True)
-    embed.add_field(name=" 📋 Ssh", value=sshpass, inline=True)
+    embed.add_field(name=" 📋 Ssh", value=ssh, inline=True)
     embed.add_field(name="📦 Port", value=port, inline=True)
     embed.add_field(name="📋 Full SSH", value=f"```{fullssh}```", inline=False)
     embed.add_field(name="🔐 Confirm Password", value=passw, inline=False)
@@ -1711,5 +1711,30 @@ async def shareipv4(interaction: discord.Interaction, container_name: str, usert
         await interaction.followup.send(f"✅ Create Vps `{ip_port}` DM sent to {usertag.mention}", ephemeral=True)
     except:
         await interaction.followup.send("❌ Could not DM the user.", ephemeral=True)
+
+@bot.tree.command(name="delete", description="Delete your VPS instance")
+@app_commands.describe(container_name="The name of your container")
+async def delete_server(interaction: discord.Interaction, container_name: str):
+    user = str(interaction.user)
+    container_id = get_container_id_from_database(user, container_name)
+
+    if not container_id:
+        embed = discord.Embed(
+            title="❌ Not Found",
+            description="No instance found with that name for your user.",
+            color=0x2400ff
+        )
+        await interaction.response.send_message(embed=embed)
+        return
+
+    # Create confirmation dialog
+    confirm_embed = discord.Embed(
+        title="**⚠️ Confirm Deletion**",
+        description=f"**Are you sure you want to delete VPS instance `{container_name}`? This action cannot be undone.**",
+        color=0x2400ff
+    )
+    
+    view = ConfirmView(container_id, container_name)
+    await interaction.response.send_message(embed=confirm_embed, view=view)
         
 bot.run(TOKEN)
