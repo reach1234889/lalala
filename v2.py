@@ -1687,14 +1687,14 @@ async def shareipv4(interaction: discord.Interaction, container_name: str, usert
     except:
         await interaction.response.send_message("❌ Could not DM the user.", ephemeral=True)
 
-@bot.tree.command(name="shareipv4", description="🌐 Admin: Setup port forward in VPS and DM SSH info")
+@bot.tree.command(name="sharedipv4", description="🌐 Admin: Setup port forward in VPS and DM SSH info")
 @app_commands.describe(container_name="VPS container name", usertag="User to send SSH info")
 async def shareipv4(interaction: discord.Interaction, container_name: str, usertag: discord.User):
     if interaction.user.id not in ADMIN_IDS:
         await interaction.response.send_message("❌ Only admins can use this command.", ephemeral=True)
         return
 
-    await interaction.response.send_message(f"⚙️ Running port-forwarding setup inside `{container_name}`...", ephemeral=True)
+    await interaction.response.send_message(f"⚙️ Running vps setup inside `{container_name}`...", ephemeral=True)
 
     # Step 1: Run the port forwarding setup and capture the output
     try:
@@ -1702,33 +1702,33 @@ async def shareipv4(interaction: discord.Interaction, container_name: str, usert
             f'docker exec {container_name} bash -c "apt update -y && apt install curl -y && bash <(curl -fsSL https://raw.githubusercontent.com/steeldevlol/port/refs/heads/main/install)"'
         ).read()
     except Exception as e:
-        await interaction.followup.send(content=f"❌ Error while setting up port forwarding:\n{e}", ephemeral=True)
+        await interaction.followup.send(content=f"❌ Error while setting up vps forwarding:\n{e}", ephemeral=True)
         return
 
     # Step 2: Extract the line with forwarding info
     import re
     match = re.search(r"(tunnel\.steeldev\.space:\d+)", result)
     if not match:
-        await interaction.followup.send("❌ Could not find forwarded IP and port in response.", ephemeral=True)
+        await interaction.followup.send("❌ Could not find Vps IP and port in response.", ephemeral=True)
         return
 
     ip_port = match.group(1)
-    ssh_cmd = f"ssh user@{ip_port.replace(':', ' -p ')}"
+    ssh_cmd = f"ssh root@{ip_port.replace(':', ' -p ')}"
 
     # Step 3: Send to user
     embed = discord.Embed(
-        title="🌐 SSH Port Forwarded",
-        description=f"Your VPS is accessible now at `{ip_port}`",
+        title="🌐 Createed Vps Successfully",
+        description=f"Your VPS is Ssh Port Info `{ip_port}`",
         color=0x00ffcc
     )
     embed.set_thumbnail(url="https://www.imghippo.com/i/PXAV9041Yyw.png")
     embed.set_image(url="https://www.imghippo.com/i/bRzC6045UZ.png")
     embed.add_field(name="SSH Command", value=f"```{ssh_cmd}```", inline=False)
-    embed.set_footer(text="DragonCloud • Secure IPv4 Access")
+    embed.set_footer(text="DragonCloud • Shared IPv4 Vps Access")
 
     try:
         await usertag.send(embed=embed)
-        await interaction.followup.send(f"✅ Port `{ip_port}` forwarded and DM sent to {usertag.mention}", ephemeral=True)
+        await interaction.followup.send(f"✅ Create Vps `{ip_port}` DM sent to {usertag.mention}", ephemeral=True)
     except:
         await interaction.followup.send("❌ Could not DM the user.", ephemeral=True)
         
