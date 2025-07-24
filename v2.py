@@ -312,10 +312,20 @@ class ConfirmView(View):
             child.disabled = True
 @bot.event
 async def on_ready():
-    await bot.change_presence(activity=discord.Activity(type=discord.ActivityType.watching, name="Gamerhacker"))
-    await bot.tree.sync()
-    print(f"✅ Logged in as {bot.user}")
+    try:
+        with open("database.txt", "r") as f:
+            vps_count = len([line for line in f if line.strip()])
+    except FileNotFoundError:
+        vps_count = 0
 
+    await bot.change_presence(
+        activity=discord.Activity(
+            type=discord.ActivityType.watching,
+            name=f"VPS | : {vps_count} | Gamerzhacker"
+        )
+    )
+    print(f"✅ Bot is ready as {bot.user}, watching {vps_count} VPS")
+    
 @tasks.loop(seconds=5)
 async def change_status():
     try:
