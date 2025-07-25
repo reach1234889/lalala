@@ -1525,20 +1525,6 @@ async def manage(interaction: discord.Interaction):
         async def cmd(self, i, b): 
             await i.response.send_modal(CmdModal())
 
-        @discord.ui.button(label="🤝 Share VPS", style=discord.ButtonStyle.secondary)
-        async def share(self, i, b): 
-            await i.response.send_message("✏️ Enter user ID to share VPS with:", ephemeral=True)
-
-            def check(msg): return msg.author.id == i.user.id and msg.channel == i.channel
-            try:
-                msg = await bot.wait_for("message", timeout=30, check=check)
-                uid = msg.content.strip()
-                with open("access.txt", "a") as f:
-                    f.write(f"{container_name}|{uid}\n")
-                await i.followup.send(f"✅ VPS shared with <@{uid}>.", ephemeral=True)
-            except:
-                await i.followup.send("❌ Timed out or invalid input.", ephemeral=True)
-
         @discord.ui.button(label="🔁 Reinstall OS", style=discord.ButtonStyle.secondary)
         async def reinstall(self, i, b): 
             await i.response.send_message("📀 Select new OS to reinstall:", view=ReinstallView(), ephemeral=True)
