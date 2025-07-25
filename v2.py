@@ -1669,7 +1669,7 @@ async def send_vps(
 
 @bot.tree.command(name="sharedipv4", description="🌐 Admin: Setup port forward in VPS and DM SSH info")
 @app_commands.describe(container_name="VPS container name", usertag="User to send SSH info")
-async def shareipv4(interaction: discord.Interaction, container_name: str, usertag: discord.User):
+async def sharedipv4(interaction: discord.Interaction, container_name: str, usertag: discord.User):
     if interaction.user.id not in ADMIN_IDS:
         await interaction.response.send_message("❌ Only admins can use this command.", ephemeral=True)
         return
@@ -1712,29 +1712,4 @@ async def shareipv4(interaction: discord.Interaction, container_name: str, usert
     except:
         await interaction.followup.send("❌ Could not DM the user.", ephemeral=True)
 
-@bot.tree.command(name="delete", description="Delete your VPS instance")
-@app_commands.describe(container_name="The name of your container")
-async def delete_server(interaction: discord.Interaction, container_name: str):
-    user = str(interaction.user)
-    container_id = get_container_id_from_database(user, container_name)
-
-    if not container_id:
-        embed = discord.Embed(
-            title="❌ Not Found",
-            description="No instance found with that name for your user.",
-            color=0x2400ff
-        )
-        await interaction.response.send_message(embed=embed)
-        return
-
-    # Create confirmation dialog
-    confirm_embed = discord.Embed(
-        title="**⚠️ Confirm Deletion**",
-        description=f"**Are you sure you want to delete VPS instance `{container_name}`? This action cannot be undone.**",
-        color=0x2400ff
-    )
-    
-    view = ConfirmView(container_id, container_name)
-    await interaction.response.send_message(embed=confirm_embed, view=view)
-        
 bot.run(TOKEN)
