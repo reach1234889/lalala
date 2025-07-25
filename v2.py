@@ -310,21 +310,28 @@ class ConfirmView(View):
         # Disable all buttons
         for child in self.children:
             child.disabled = True
+import asyncio
+
 @bot.event
 async def on_ready():
-    try:
-        with open("database.txt", "r") as f:
-            vps_count = len([line for line in f if line.strip()])
-    except FileNotFoundError:
-        vps_count = 0
+    async def update_status():
+        while True:
+            try:
+                with open("database.txt", "r") as f:
+                    count = len([line for line in f if line.strip()])
+            except FileNotFoundError:
+                count = 0
 
-    await bot.change_presence(
-        activity=discord.Activity(
-            type=discord.ActivityType.watching,
-            name=f"VPS | : {vps_count} | Gamerzhacker"
-        )
-    )
-    print(f"✅ Bot is ready as {bot.user}, watching {vps_count} VPS")
+            await bot.change_presence(
+                activity=discord.Activity(
+                    type=discord.ActivityType.watching,
+                    name=f"VPS Deploy | Total: {count} | Gamerzhacker"
+                )
+            )
+            await asyncio.sleep(300)  # update every 5 mins
+
+    bot.loop.create_task(update_status())
+    print(f"✅ Bot Ready: {bot.user}")
     
 @tasks.loop(seconds=5)
 async def change_status():
@@ -1418,17 +1425,25 @@ async def manage(interaction: discord.Interaction):
     servers = get_user_servers(userid)
     shared = []
 
-    with open("access.txt", "r") as f:
-        for line in f:
-            vps, uid = line.strip().split("|")
-            if uid == userid:
-                shared.append(vps)
+    try:
+        with open("access.txt", "r") as f:
+            for line in f:
+                vps, uid = line.strip().split("|")
+                if uid == userid:
+                    shared.append(vps)
+    except FileNotFoundError:
+        pass
 
     if not servers and not shared:
         return await interaction.response.send_message("❌ You have no VPS or shared access.", ephemeral=True)
 
     all_vps = servers + shared
     container_name = all_vps[0].split('|')[0] if '|' in all_vps[0] else all_vps[0]
+
+    # Check if container exists
+    check_container = os.popen(f"docker ps -a --format '{{{{.Names}}}}'").read()
+    if container_name not in check_container:
+        return await interaction.response.send_message("❌ VPS container not found.", ephemeral=True)
 
     # VPS status
     running = os.popen(f"docker inspect -f '{{{{.State.Running}}}}' {container_name}").read().strip()
@@ -1447,9 +1462,12 @@ async def manage(interaction: discord.Interaction):
         command = discord.ui.TextInput(label="Enter your command", style=discord.TextStyle.paragraph)
 
         async def on_submit(self, interaction2):
-            output = os.popen(f'docker exec {container_name} bash -c "{self.command.value}"').read()
-            output = output[:1900] + '...' if len(output) > 1900 else output
-            await interaction2.response.send_message(f"📤 Output:\n```{output}```", ephemeral=True)
+            try:
+                output = os.popen(f'docker exec {container_name} bash -c "{self.command.value}"').read()
+                output = output[:1900] + '...' if len(output) > 1900 else output
+                await interaction2.response.send_message(f"📤 Output:\n```{output}```", ephemeral=True)
+            except Exception as e:
+                await interaction2.response.send_message(f"❌ Error: {e}", ephemeral=True)
 
     class OSSelect(discord.ui.Select):
         def __init__(self):
@@ -1462,8 +1480,7 @@ async def manage(interaction: discord.Interaction):
 
         async def callback(self, interaction2):
             os_choice = self.values[0]
-            # 🔁 Replace this with your reinstall logic
-            await interaction2.response.send_message(f"📀 Reinstalling with `{os_choice}` (demo only)", ephemeral=True)
+            await interaction2.response.send_message(f"📀 Reinstalling VPS with `{os_choice}` (demo)", ephemeral=True)
 
     class ReinstallView(discord.ui.View):
         def __init__(self):
@@ -1476,18 +1493,27 @@ async def manage(interaction: discord.Interaction):
 
         @discord.ui.button(label="✅ Start", style=discord.ButtonStyle.success)
         async def start(self, i, b): 
-            os.system(f"docker start {container_name}")
-            await i.response.send_message("✅ VPS started.", ephemeral=True)
+            try:
+                os.system(f"docker start {container_name}")
+                await i.response.send_message("✅ VPS started.", ephemeral=True)
+            except Exception as e:
+                await i.response.send_message(f"❌ Error: {e}", ephemeral=True)
 
         @discord.ui.button(label="🛑 Stop", style=discord.ButtonStyle.danger)
         async def stop(self, i, b): 
-            os.system(f"docker stop {container_name}")
-            await i.response.send_message("🛑 VPS stopped.", ephemeral=True)
+            try:
+                os.system(f"docker stop {container_name}")
+                await i.response.send_message("🛑 VPS stopped.", ephemeral=True)
+            except Exception as e:
+                await i.response.send_message(f"❌ Error: {e}", ephemeral=True)
 
         @discord.ui.button(label="🔁 Restart", style=discord.ButtonStyle.primary)
         async def restart(self, i, b): 
-            os.system(f"docker restart {container_name}")
-            await i.response.send_message("🔁 VPS restarted.", ephemeral=True)
+            try:
+                os.system(f"docker restart {container_name}")
+                await i.response.send_message("🔁 VPS restarted.", ephemeral=True)
+            except Exception as e:
+                await i.response.send_message(f"❌ Error: {e}", ephemeral=True)
 
         @discord.ui.button(label="📊 Status", style=discord.ButtonStyle.secondary)
         async def status(self, i, b): 
@@ -1507,6 +1533,26 @@ async def manage(interaction: discord.Interaction):
             try:
                 msg = await bot.wait_for("message", timeout=30, check=check)
                 uid = msg.content.strip()
+                with open("access.txt", "a") as f:
+                    f.write(f"{container_name}|{uid}\n")
+                await i.followup.send(f"✅ VPS shared with <@{uid}>.", ephemeral=True)
+            except:
+                await i.followup.send("❌ Timed out or invalid input.", ephemeral=True)
+
+        @discord.ui.button(label="🔁 Reinstall OS", style=discord.ButtonStyle.secondary)
+        async def reinstall(self, i, b): 
+            await i.response.send_message("📀 Select new OS to reinstall:", view=ReinstallView(), ephemeral=True)
+
+        @discord.ui.button(label="🗑️ Delete VPS", style=discord.ButtonStyle.danger)
+        async def delete(self, i, b): 
+            try:
+                os.system(f"docker stop {container_name}")
+                os.system(f"docker rm {container_name}")
+                await i.response.send_message(f"🗑️ `{container_name}` deleted.", ephemeral=True)
+            except Exception as e:
+                await i.response.send_message(f"❌ Error: {e}", ephemeral=True)
+
+    await interaction.response.send_message(embed=embed, view=ManageButtons(), ephemeral=True)
                 with open("access.txt", "a") as f:
                     f.write(f"{container_name}|{uid}\n")
                 await i.followup.send(f"✅ VPS shared with <@{uid}>.", ephemeral=True)
