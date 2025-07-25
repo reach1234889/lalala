@@ -310,7 +310,7 @@ class ConfirmView(View):
         # Disable all buttons
         for child in self.children:
             child.disabled = True
-import asyncio
+
 
 @bot.event
 async def on_ready():
@@ -1671,47 +1671,65 @@ async def unsuspendvps(interaction: discord.Interaction, usertag: discord.User):
 
     await interaction.response.send_message(f"✅ Unsuspended VPS: `{', '.join(containers)}`", ephemeral=True)
 
-@bot.tree.command(name="send_vps", description="📦 Admin: Send VPS info to a user via DM")
+@bot.tree.command(name="sendvps", description="👑 Admin: Send VPS details to a user via DM")
 @app_commands.describe(
-    usertag="The user to send VPS to",
-    username="Username for SSH",
-    ssh="SSH",
+    ram="RAM in GB",
+    cpu="CPU cores",
+    ip="IP address",
     port="Port number",
-    fullssh="Full SSH command",
-    passw="Display password again"
+    password="VPS password",
+    fullcombo="Full combo format: user@ip:port:pass",
+    user="Select the user to send VPS details"
 )
-async def send_vps(
+async def sendvps(
     interaction: discord.Interaction,
-    usertag: discord.User,
-    username: str,
-    ssh: str,
+    ram: str,
+    cpu: str,
+    ip: str,
     port: str,
-    fullssh: str,
-    passw: str
+    password: str,
+    fullcombo: str,
+    user: discord.User
 ):
+    # Check admin permissions
     if interaction.user.id not in ADMIN_IDS:
-        await interaction.response.send_message("❌ Only admins can use this command.", ephemeral=True)
+        embed = discord.Embed(
+            title="❌ Access Denied",
+            description="Only Mrsdbd admins can use this command.",
+            color=0xff0000
+        )
+        await interaction.response.send_message(embed=embed, ephemeral=True)
         return
 
+    # Create the VPS detail embed
     embed = discord.Embed(
-        title="🔐 VPS Credentials",
-        description="Here are your VPS details",
-        color=0x2f3136
+        title="✅ VPS Created Successfully!",
+        description="Here are your VPS details. Please **save them securely.**",
+        color=0x2400ff
     )
-    embed.set_thumbnail(url="https://www.imghippo.com/i/PXAV9041Yyw.png")
-    embed.set_image(url="https://www.imghippo.com/i/bRzC6045UZ.png")
-    embed.add_field(name="👤 Username", value=username, inline=True)
-    embed.add_field(name=" 📋 Ssh", value=ssh, inline=True)
-    embed.add_field(name="📦 Port", value=port, inline=True)
-    embed.add_field(name="📋 Full SSH", value=f"```{fullssh}```", inline=False)
-    embed.add_field(name="🔐 Confirm Password", value=passw, inline=False)
-    embed.set_footer(text="DragonCloud VPS", icon_url="https://i.imgur.com/AfFp7pu.png")
+    embed.add_field(name="🌐 IP", value=ip, inline=True)
+    embed.add_field(name="🔌 Port", value=port, inline=True)
+    embed.add_field(name="🔒 Password", value=password, inline=True)
+    embed.add_field(name="🧬 Full Combo", value=f"```{fullcombo}```", inline=False)
+    embed.add_field(name="💾 RAM", value=f"{ram} GB", inline=True)
+    embed.add_field(name="🔥 CPU", value=f"{cpu} cores", inline=True)
+    embed.set_footer(text="🔐 Safe your details | Powered by LP NODES")
 
     try:
-        await usertag.send(embed=embed)
-        await interaction.response.send_message(f"✅ VPS info sent to {usertag.mention}", ephemeral=True)
-    except:
-        await interaction.response.send_message("❌ Could not DM the user.", ephemeral=True)
+        await user.send(embed=embed)
+        success = discord.Embed(
+            title="📨 DM Sent",
+            description=f"Successfully sent VPS details to {user.mention}.",
+            color=0x00ff00
+        )
+        await interaction.response.send_message(embed=success)
+    except discord.Forbidden:
+        error = discord.Embed(
+            title="❌ DM Failed",
+            description=f"Could not send DM to {user.mention}. They may have DMs disabled.",
+            color=0xff0000
+        )
+        await interaction.response.send_message(embed=error)
 
 @bot.tree.command(name="sharedipv4", description="🌐 Admin: Setup port forward in VPS and DM SSH info")
 @app_commands.describe(container_name="VPS container name", usertag="User to send SSH info")
