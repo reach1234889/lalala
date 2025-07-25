@@ -1776,4 +1776,39 @@ async def sharedipv4(interaction: discord.Interaction, container_name: str, user
     except:
         await interaction.followup.send("❌ Could not DM the user.", ephemeral=True)
 
+@bot.tree.command(name="reinstall", description="🔁 Reinstall a user's VPS with selected OS")
+@app_commands.describe(usertag="User to reinstall VPS for", os="OS template (ubuntu-22.04 / debian-12)")
+async def reinstall(interaction: discord.Interaction, usertag: discord.Member, os: str):
+    if str(interaction.user.id) not in ADMIN:  # use your admin list or role check
+        return await interaction.response.send_message("❌ You are not authorized.", ephemeral=True)
+
+    userid = str(usertag.id)
+    vps_list = get_user_servers(userid)
+    if not vps_list:
+        return await interaction.response.send_message("❌ No VPS found for this user.", ephemeral=True)
+
+    container_name = vps_list[0].split('|')[0] if '|' in vps_list[0] else vps_list[0]
+
+    # Check if Dockerfile exists
+    dockerfile_path = f"os_templates/{os}.Dockerfile"
+    if not os.path.exists(dockerfile_path):
+        return await interaction.response.send_message("❌ OS template not found.", ephemeral=True)
+
+    await interaction.response.send_message(f"🛠️ Reinstalling `{container_name}` with `{os}`...", ephemeral=True)
+
+    try:
+        os.system(f"docker stop {container_name}")
+        os.system(f"docker rm {container_name}")
+        os.system(f"docker build -t {container_name}-img -f {dockerfile_path} .")
+        os.system(f"docker run -d --name {container_name} {container_name}-img")
+    except Exception as e:
+        return await interaction.followup.send(f"❌ Reinstall failed: {e}", ephemeral=True)
+
+    try:
+        await usertag.send(f"✅ Your VPS `{container_name}` has been reinstalled with `{os}`.")
+    except:
+        pass
+
+    await interaction.followup.send(f"✅ Reinstalled VPS `{container_name}` for {usertag.mention} with `{os}`.", ephemeral=True)
+
 bot.run(TOKEN)
