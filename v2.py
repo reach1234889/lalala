@@ -1537,14 +1537,7 @@ async def manage(interaction: discord.Interaction):
                 await i.response.send_message(f"🗑️ `{container_name}` deleted.", ephemeral=True)
             except Exception as e:
                 await i.response.send_message(f"❌ Error: {e}", ephemeral=True)
-
-    await interaction.response.send_message(embed=embed, view=ManageButtons(), ephemeral=True)
-                with open("access.txt", "a") as f:
-                    f.write(f"{container_name}|{uid}\n")
-                await i.followup.send(f"✅ VPS shared with <@{uid}>.", ephemeral=True)
-            except:
-                await i.followup.send("❌ Timed out or invalid input.", ephemeral=True)
-
+                
         @discord.ui.button(label="🔁 Reinstall OS", style=discord.ButtonStyle.secondary)
         async def reinstall(self, i, b): 
             await i.response.send_message("📀 Select new OS to reinstall:", view=ReinstallView(), ephemeral=True)
