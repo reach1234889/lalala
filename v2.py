@@ -1829,4 +1829,61 @@ class VPSManager(commands.Cog):
 async def setup(bot):
     await bot.add_cog(VPSManager(bot))
 
+@bot.tree.command(name="nodes", description="📊 Show your VPS instances with status and resources")
+async def nodes(interaction: discord.Interaction):
+    user_id = str(interaction.user.id)
+    servers = get_user_servers(user_id)
+    await interaction.response.defer(ephemeral=True)
+
+    if not servers:
+        embed = discord.Embed(
+            title="📦 Your VPS Instances",
+            description="You don't have any VPS instances.", 
+            color=0xff5555
+        )
+        await interaction.followup.send(embed=embed, ephemeral=True)
+        return
+
+    def make_embed():
+        embed = discord.Embed(
+            title="🖥️ VPS Instance List",
+            description=f"Showing {len(servers)} instance(s) for <@{user_id}>",
+            color=0x00aaff
+        )
+        for server in servers:
+            parts = server.split('|')
+            container_name = parts[0]
+            # get status
+            try:
+                running = os.popen(f"docker inspect -f '{{{{.State.Running}}}}' {container_name}").read().strip()
+                status_str = "🟢 Online" if running == "true" else "🔴 Offline"
+            except:
+                status_str = "🔴 Unknown"
+            # placeholder resource pulls (replace with real functions if available)
+            # Example using docker stats could be added here
+            ram_info = "N/A"
+            cpu_info = "Ryzen 9"  # if static branding; otherwise pull actual
+            disk_info = "Shared / 10TB"
+
+            embed.add_field(
+                name=f"{container_name} ({status_str})",
+                value=f"**RAM:** {ram_info}\n**CPU:** {cpu_info}\n**Disk:** {disk_info}",
+                inline=False
+            )
+        return embed
+
+    class RefreshView(discord.ui.View):
+        def __init__(self):
+            super().__init__(timeout=60)
+
+        @discord.ui.button(label="Refresh", style=discord.ButtonStyle.primary)
+        async def refresh(self, interaction2: discord.Interaction, button: discord.ui.Button):
+            new_servers = get_user_servers(user_id)
+            nonlocal servers
+            servers = new_servers
+            await interaction2.response.edit_message(embed=make_embed(), view=self)
+
+    view = RefreshView()
+    await interaction.followup.send(embed=make_embed(), view=view, ephemeral=True)
+
 bot.run(TOKEN)
