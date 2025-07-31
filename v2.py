@@ -1790,4 +1790,43 @@ async def reinstall(interaction: discord.Interaction, usertag: discord.Member, o
 
     await interaction.followup.send(f"✅ Reinstalled VPS `{container_name}` for {usertag.mention} with `{os}`.", ephemeral=True)
 
+class VPSManager(commands.Cog):
+    def __init__(self, bot):
+        self.bot = bot
+
+    @bot.tree.command(name="upgradevps", description="Upgrade VPS by setting RAM, CPU, Disk")
+    @app_commands.describe(setram="New RAM", setcpu="New CPU", setdisk="New Disk", usertag="User to DM", container_namevps="Container name")
+    async def upgradevps(self, interaction: Interaction, setram: str, setcpu: str, setdisk: str, usertag: discord.User, container_namevps: str):
+        await interaction.response.defer()
+
+        try:
+            # Step 1: Run upgrade commands inside container
+            commands = [
+                f"docker exec {container_namevps} apt update && apt upgrade -y",
+                f"docker exec {container_namevps} apt install git -y",
+                f"docker exec {container_namevps} git clone https://github.com/katy-the-kat/free-poweredge",
+                f"docker exec {container_namevps} apt install docker.io -y",
+                f"docker exec {container_namevps} bash -c 'cd free-poweredge && bash run && bash make'"
+            ]
+            
+            output_log = ""
+            for cmd in commands:
+                process = subprocess.run(cmd, shell=True, capture_output=True, text=True)
+                output_log += f"\n\nRunning: `{cmd}`\n{process.stdout}\n{process.stderr}"
+
+            # Optional: Log result back to admin or DM
+            await usertag.send(embed=discord.Embed(
+                title=f"✅ VPS Upgraded",
+                description=f"RAM: `{setram}`\nCPU: `{setcpu}`\nDisk: `{setdisk}`\n\nContainer: `{container_namevps}`",
+                color=discord.Color.green()
+            ))
+
+            await interaction.followup.send(f"✅ Upgrade complete and DM sent to {usertag.mention}")
+
+        except Exception as e:
+            await interaction.followup.send(f"❌ Error during upgrade: `{str(e)}`")
+
+async def setup(bot):
+    await bot.add_cog(VPSManager(bot))
+
 bot.run(TOKEN)
