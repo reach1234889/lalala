@@ -1418,46 +1418,39 @@ async def create(interaction: discord.Interaction):
     )
     await interaction.response.send_message(embed=embed, view=RewardView(), ephemeral=True)
 
-@bot.tree.command(name="manage", description="🧰 Manage your VPS or shared ones")
+@bot.tree.command(name="manage", description="🧰 Manage your own VPS (no shared)")
 async def manage(interaction: discord.Interaction):
     userid = str(interaction.user.id)
-
     servers = get_user_servers(userid)
-    shared = []
 
-    try:
-        with open("access.txt", "r") as f:
-            for line in f:
-                vps, uid = line.strip().split("|")
-                if uid == userid:
-                    shared.append(vps)
-    except FileNotFoundError:
-        pass
+    if not servers:
+        return await interaction.response.send_message("❌ You don't have any VPS.", ephemeral=True)
 
-    if not servers and not shared:
-        return await interaction.response.send_message("❌ You have no VPS or shared access.", ephemeral=True)
+    container_name = servers[0].split('|')[0]
 
-    all_vps = servers + shared
-    container_name = all_vps[0].split('|')[0] if '|' in all_vps[0] else all_vps[0]
-
-    # Check if container exists
-    check_container = os.popen(f"docker ps -a --format '{{{{.Names}}}}'").read()
-    if container_name not in check_container:
+    # Verify container exists
+    container_list = os.popen(f"docker ps -a --format '{{{{.Names}}}}'").read()
+    if container_name not in container_list:
         return await interaction.response.send_message("❌ VPS container not found.", ephemeral=True)
 
-    # VPS status
+    # Status check
     running = os.popen(f"docker inspect -f '{{{{.State.Running}}}}' {container_name}").read().strip()
     status = "🟢 Online" if running == "true" else "🔴 Offline"
     color = 0x2ecc71 if running == "true" else 0xe74c3c
 
+    # Resource placeholders (replace with actual collectors)
+    ram_info = "N/A"
+    cpu_info = "Ryzen 9"
+    disk_info = "Shared / 10TB"
+
     embed = discord.Embed(
-        title=f"🖥️ Managing VPS: `{container_name}`",
-        description=f"**Status:** {status}",
+        title=f"🖥️ Manage VPS: `{container_name}`",
+        description=f"**Status:** {status}\n**RAM:** {ram_info} | **CPU:** {cpu_info} | **Disk:** {disk_info}",
         color=color
     )
     embed.set_image(url="https://www.imghippo.com/i/bRzC6045UZ.png")
-    embed.set_thumbnail(url="https://www.imghippo.com/i/PXAV9041Yyw.png")
-
+    embed.set_footer(text="VPS Dashboard")
+    
     class CmdModal(discord.ui.Modal, title="📥 Run Command on VPS"):
         command = discord.ui.TextInput(label="Enter your command", style=discord.TextStyle.paragraph)
 
