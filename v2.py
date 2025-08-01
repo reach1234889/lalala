@@ -1000,7 +1000,7 @@ async def deploy_with_os(interaction, os_type, ram, cpu, user_id, user, containe
             
             # Public success message
             success_embed = discord.Embed(
-                title="**✅ Create VPS hk-i10 Successfully**",
+                title=" **✅ Create VPS Dm Successfully** ",
                 description=f"** 🎉 VPS instance has been created for <@{user_id}>. They should check their DMs for connection details.**",
                 color=0x00ff00
             )
@@ -1418,20 +1418,25 @@ async def create(interaction: discord.Interaction):
     )
     await interaction.response.send_message(embed=embed, view=RewardView(), ephemeral=True)
 
-@bot.tree.command(name="manage", description="🧰 Manage your own VPS (no shared)")
+
+@bot.tree.command(name="manage", description="🧰 Manage your VPS or shared ones")
 async def manage(interaction: discord.Interaction):
     userid = str(interaction.user.id)
+
     servers = get_user_servers(userid)
+    shared = []
 
-    if not servers:
-        return await interaction.response.send_message("❌ You don't have any VPS.", ephemeral=True)
+    with open("access.txt", "r") as f:
+        for line in f:
+            vps, uid = line.strip().split("|")
+            if uid == userid:
+                shared.append(vps)
 
-    container_name = servers[0].split('|')[0]
+    if not servers and not shared:
+        return await interaction.response.send_message("❌ You have no VPS or shared access.", ephemeral=True)
 
-    # Verify container exists
-    container_list = os.popen(f"docker ps -a --format '{{{{.Names}}}}'").read()
-    if container_name not in container_list:
-        return await interaction.response.send_message("❌ VPS container not found.", ephemeral=True)
+    all_vps = servers + shared
+    container_name = all_vps[0].split('|')[0] if '|' in all_vps[0] else all_vps[0]
 
     # Status check
     running = os.popen(f"docker inspect -f '{{{{.State.Running}}}}' {container_name}").read().strip()
@@ -1542,67 +1547,6 @@ async def manage(interaction: discord.Interaction):
             await i.response.send_message(f"🗑️ `{container_name}` deleted.", ephemeral=True)
 
     await interaction.response.send_message(embed=embed, view=ManageButtons(), ephemeral=True)
-
-# === /myshares ===
-@bot.tree.command(name="myshares", description="📋 List all users you've shared VPS access with")
-async def myshares(interaction: discord.Interaction):
-    user_id = str(interaction.user.id)
-    if not os.path.exists(ACCESS_FILE):
-        await interaction.response.send_message("You haven't shared any VPS access yet.", ephemeral=True)
-        return
-
-    owned_vps = [line.split('|')[0] for line in get_user_servers(user_id)]
-    shared_data = {}
-    with open(ACCESS_FILE, 'r') as f:
-        for line in f:
-            container, shared_user = line.strip().split('|')
-            if container in owned_vps:
-                shared_data.setdefault(container, []).append(shared_user)
-
-    if not shared_data:
-        await interaction.response.send_message("You haven’t shared access to any VPS.", ephemeral=True)
-        return
-
-    embed = discord.Embed(title="👥 Shared VPS Access", color=0x00aaff)
-    for vps, users in shared_data.items():
-        display = "\n".join(f"<@{uid}>" for uid in users)
-        embed.add_field(name=vps, value=display or "No users", inline=False)
-
-    await interaction.response.send_message(embed=embed, ephemeral=True)
-
-
-# === /revokeshareall ===
-@bot.tree.command(name="revokeshareall", description="🧹 Remove all shared access from a VPS")
-@app_commands.describe(container_name="Your VPS name")
-async def revokeshareall(interaction: discord.Interaction, container_name: str):
-    user_id = str(interaction.user.id)
-    if not has_access(user_id, container_name):
-        await interaction.response.send_message("❌ You don’t have access to this VPS.", ephemeral=True)
-        return
-
-    remove_all_shares(container_name)
-    await interaction.response.send_message(f"✅ All users removed from `{container_name}`.", ephemeral=True)
-
-
-# === /sharesof (Admin only) ===
-@bot.tree.command(name="sharesof", description="🔍 Admin: Check shared users of a user's VPS")
-@app_commands.describe(userid="Target user ID")
-async def sharesof(interaction: discord.Interaction, userid: str):
-    if interaction.user.id not in ADMIN_IDS:
-        await interaction.response.send_message("❌ Only admins can use this command.", ephemeral=True)
-        return
-
-    owned_vps = [line.split('|')[0] for line in get_user_servers(userid)]
-    if not owned_vps:
-        await interaction.response.send_message("This user doesn't own any VPS.", ephemeral=True)
-        return
-
-    embed = discord.Embed(title=f"📦 VPS Shares of <@{userid}>", color=0x00aaff)
-    for vps in owned_vps:
-        shared = get_shared_users(vps)
-        embed.add_field(name=vps, value="\n".join(f"<@{u}>" for u in shared) or "No shares", inline=False)
-
-    await interaction.response.send_message(embed=embed, ephemeral=True)
 
 @bot.tree.command(name="suspendvps", description="❌ Admin: Suspend all VPS of a user")
 @app_commands.describe(usertag="The user whose VPS you want to suspend")
