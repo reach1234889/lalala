@@ -21,6 +21,7 @@ RAM_LIMIT = '64g'
 SERVER_LIMIT = 1
 database_file = 'database.txt'
 PUBLIC_IP = '138.68.79.95'
+YOUR_BOT_ID = '1396853238350876682'
 
 # Admin user IDs - add your admin user IDs here
 ADMIN_IDS = [1258646055860568094,1159037240622723092]  # Replace with actual admin IDs
@@ -987,8 +988,8 @@ async def deploy_with_os(interaction, os_type, ram, cpu, user_id, user, containe
         dm_embed.add_field(name="💾 RAM Allocation", value=f"{ram}GB", inline=True)
         dm_embed.add_field(name="🔥 CPU Cores", value=f"{cpu} cores", inline=True)
         dm_embed.add_field(name="🧊 Container Name", value=container_name, inline=False)
-        dm_embed.add_field(name="💾 Storage", value=f"10000 GB (Shared storage)", inline=True)
-        dm_embed.add_field(name="🔒 Password", value="hk-i9", inline=False)
+        dm_embed.add_field(name="💾 Storage", value=f"1TB (Shared storage)", inline=True)
+        dm_embed.add_field(name="🔒 Password", value="root", inline=False)
         
         dm_embed.set_footer(text="Keep this information safe and private!")
         
