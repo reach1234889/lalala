@@ -3,7 +3,7 @@ import logging
 import subprocess
 import sys
 import os
-import re
+import re gg
 import time
 import shlex
 import concurrent.futures
@@ -11,9 +11,9 @@ import discord
 from discord.ext import commands, tasks
 import docker
 import asyncio
-from discord import app_commands
+from discord import app_commands, ui
 from discord.ui import Button, View, Select
-import string import ??ghjdd
+import string 
 from datetime import datetime, timedelta
 from typing import Optional, Literal
 
@@ -1432,224 +1432,6 @@ async def create(interaction: discord.Interaction):
         color=discord.Color.blurple()
     )
     await interaction.response.send_message(embed=embed, view=RewardView(), ephemeral=True)
-
-@bot.tree.command(name="manage", description="🧰 Manage your VPS or shared ones")
-async def manage(interaction: discord.Interaction):
-    user_id = str(interaction.user.id)
-    servers = get_user_servers(user_id)
-    shared = []
-
-    try:
-        with open("access.txt", "r") as f:
-            for line in f:
-                try:
-                    vps, uid = line.strip().split("|")
-                    if uid == user_id:
-                        shared.append(vps)
-                except ValueError:
-                    continue
-    except FileNotFoundError:
-        pass
-
-    if not servers and not shared:
-        embed = discord.Embed(
-            title="❌ No VPS Found",
-            description="You have no VPS or shared access. Use `/create` to claim one!",
-            color=0xff5555
-        )
-        return await interaction.response.send_message(embed=embed, ephemeral=True)
-
-    container_names = [shlex.quote(line.split('|')[1]) for line in servers if '|' in line] + shared
-
-    class VPSSelect(Select):
-        def __init__(self):
-            options = [discord.SelectOption(label=name, value=name) for name in container_names]
-            super().__init__(placeholder="Select a VPS to manage", options=options)
-
-        async def callback(self, interaction2):
-            container_name = self.values[0]
-            stats = get_container_stats(container_name)
-            try:
-                result = subprocess.run(
-                    ["docker", "inspect", "-f", "{{.State.Running}}", container_name],
-                    capture_output=True, text=True, check=True
-                )
-                running = result.stdout.strip()
-                status = "🟢 Online" if running == "true" else "🔴 Offline"
-                color = 0x2ecc71 if running == "true" else 0xe74c3c
-            except subprocess.CalledProcessError:
-                status = "🔴 Unknown"
-                color = 0xe74c3c
-
-            ram_info = stats["memory"]
-            cpu_info = stats["cpu"]
-            disk_info = "Shared / 10TB"
-
-            embed = discord.Embed(
-                title=f"🖥️ Manage VPS: `{container_name}`",
-                description=f"**Status:** {status}\n**RAM:** {ram_info} | **CPU:** {cpu_info} | **Disk:** {disk_info}",
-                color=color
-            )
-            embed.set_image(url="https://www.imghippo.com/i/bRzC6045UZ.png")
-            embed.set_footer(text="VPS Dashboard")
-
-            await interaction2.response.edit_message(embed=embed, view=ManageButtons(container_name))
-
-    class CmdModal(Modal, title="📥 Run Command on VPS"):
-        command = TextInput(label="Enter your command", style=discord.TextStyle.paragraph)
-
-        async def on_submit(self, interaction2):
-            try:
-                output = subprocess.run(
-                    ["docker", "exec", container_name, "bash", "-c", self.command.value],
-                    capture_output=True, text=True, check=True
-                )
-                output = output.stdout[:1900] + '...' if len(output.stdout) > 1900 else output.stdout
-                await interaction2.response.send_message(f"📤 Output:\n```{output}```", ephemeral=True)
-            except subprocess.CalledProcessError as e:
-                await interaction2.response.send_message(f"❌ Error: {e.stderr}", ephemeral=True)
-
-    class OSSelect(Select):
-        def __init__(self):
-            super().__init__(placeholder="📀 Select OS to reinstall", options=[
-                discord.SelectOption(label="Ubuntu 22.04", value="ubuntu-22.04"),
-                discord.SelectOption(label="Ubuntu 20.04", value="ubuntu-20.04"),
-                discord.SelectOption(label="Debian 12", value="debian-12"),
-                discord.SelectOption(label="Debian 11", value="debian-11")
-            ])
-
-        async def callback(self, interaction2):
-            os_choice = self.values[0]
-            await interaction2.response.send_message(f"📀 Reinstalling VPS with `{os_choice}` (demo)", ephemeral=True)
-
-    class ReinstallView(View):
-        def __init__(self):
-            super().__init__()
-            self.add_item(OSSelect())
-
-    class ManageButtons(View):
-        def __init__(self, container_name):
-            super().__init__(timeout=None)
-            self.container_name = container_name
-
-        @discord.ui.button(label="✅ Start", style=discord.ButtonStyle.success)
-        async def start(self, i, b):
-            try:
-                subprocess.run(["docker", "start", self.container_name], check=True, capture_output=True, text=True)
-                await i.response.send_message("✅ VPS started.", ephemeral=True)
-            except subprocess.CalledProcessError as e:
-                await i.response.send_message(f"❌ Error: {e.stderr}", ephemeral=True)
-
-        @discord.ui.button(label="🛑 Stop", style=discord.ButtonStyle.danger)
-        async def stop(self, i, b):
-            try:
-                subprocess.run(["docker", "stop", self.container_name], check=True, capture_output=True, text=True)
-                await i.response.send_message("🛑 VPS stopped.", ephemeral=True)
-            except subprocess.CalledProcessError as e:
-                i.response.send_message(f"❌ Error: {e.stderr}", ephemeral=True)
-
-        @discord.ui.button(label="🔁 Restart", style=discord.ButtonStyle.primary)
-        async def restart(self, i, b):
-            try:
-                subprocess.run(["docker", "restart", self.container_name], check=True, capture_output=True, text=True)
-                await i.response.send_message("🔁 VPS restarted.", ephemeral=True)
-            except subprocess.CalledProcessError as e:
-                await i.response.send_message(f"❌ Error: {e.stderr}", ephemeral=True)
-
-        @discord.ui.button(label="📊 Status", style=discord.ButtonStyle.secondary)
-        async def status(self, i, b):
-            try:
-                result = subprocess.run(
-                    ["docker", "inspect", "-f", "{{.State.Running}}", self.container_name],
-                    capture_output=True, text=True, check=True
-                )
-                stat = "🟢 Online" if result.stdout.strip() == "true" else "🔴 Offline"
-                await i.response.send_message(f"📶 VPS is: **{stat}**", ephemeral=True)
-            except subprocess.CalledProcessError as e:
-                await i.response.send_message(f"❌ Error: {e.stderr}", ephemeral=True)
-
-        @discord.ui.button(label="🖥️ Run CMD", style=discord.ButtonStyle.secondary)
-        async def cmd(self, i, b):
-            await i.response.send_modal(CmdModal())
-
-        @discord.ui.button(label="🔁 Reinstall OS", style=discord.ButtonStyle.secondary)
-        async def reinstall(self, i, b):
-            await i.response.send_message("📀 Select new OS to reinstall:", view=ReinstallView(), ephemeral=True)
-
-        @discord.ui.button(label="🗑️ Delete VPS", style=discord.ButtonStyle.danger)
-        async def delete(self, i, b):
-            try:
-                subprocess.run(["docker", "stop", self.container_name], check=True, capture_output=True, text=True)
-                subprocess.run(["docker", "rm", self.container_name], check=True, capture_output=True, text=True)
-                await i.response.send_message(f"🗑️ `{self.container_name}` deleted.", ephemeral=True)
-            except subprocess.CalledProcessError as e:
-                await i.response.send_message(f"❌ Error: {e.stderr}", ephemeral=True)
-
-        @discord.ui.button(label="🔑 SSH Info", style=discord.ButtonStyle.secondary)
-        async def ssh_info(self, i, b):
-            ssh_command = get_ssh_command_from_database(self.container_name)
-            if ssh_command:
-                embed = discord.Embed(
-                    title="🔑 SSH Info",
-                    description=f"**SSH Command:**\n```{ssh_command}```",
-                    color=0x00ff00
-                )
-                try:
-                    await i.user.send(embed=embed)
-                    await i.response.send_message("✅ SSH info sent to your DMs.", ephemeral=True)
-                except discord.Forbidden:
-                    await i.response.send_message(embed=embed, ephemeral=True)
-            else:
-                await i.response.send_message("❌ No SSH info found for this VPS.", ephemeral=True)
-
-        @discord.ui.button(label="⬅️ Back", style=discord.ButtonStyle.secondary)
-        async def back(self, i, b):
-            embed = discord.Embed(
-                title="🖥️ Select a VPS to Manage",
-                description="You have multiple VPS instances. Please select one to manage.",
-                color=0x00aaff
-            )
-            view = View()
-            view.add_item(VPSSelect())
-            await i.response.edit_message(embed=embed, view=view)
-
-    if len(container_names) == 1:
-        container_name = container_names[0]
-        stats = get_container_stats(container_name)
-        try:
-            result = subprocess.run(
-                ["docker", "inspect", "-f", "{{.State.Running}}", container_name],
-                capture_output=True, text=True, check=True
-            )
-            running = result.stdout.strip()
-            status = "🟢 Online" if running == "true" else "🔴 Offline"
-            color = 0x2ecc71 if running == "true" else 0xe74c3c
-        except subprocess.CalledProcessError:
-            status = "🔴 Unknown"
-            color = 0xe74c3c
-
-        ram_info = stats["memory"]
-        cpu_info = stats["cpu"]
-        disk_info = "Shared / 10TB"
-
-        embed = discord.Embed(
-            title=f"🖥️ Manage VPS: `{container_name}`",
-            description=f"**Status:** {status}\n**RAM:** {ram_info} | **CPU:** {cpu_info} | **Disk:** {disk_info}",
-            color=color
-        )
-        embed.set_image(url="https://www.imghippo.com/i/bRzC6045UZ.png")
-        embed.set_footer(text="VPS Dashboard")
-
-        await interaction.response.send_message(embed=embed, view=ManageButtons(container_name), ephemeral=True)
-    else:
-        embed = discord.Embed(
-            title="🖥️ Select a VPS to Manage",
-            description="You have multiple VPS instances. Please select one to manage.",
-            color=0x00aaff
-        )
-        view = View()
-        view.add_item(VPSSelect())
-        await interaction.response.send_message(embed=embed, view=view, ephemeral=True)
 
 # Placeholder for existing !create-vps and !vpslist to confirm dual-prefix support
 @bot.command(name="create-vps")
