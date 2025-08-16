@@ -2139,7 +2139,6 @@ async def nodes(interaction: discord.Interaction):
     await interaction.followup.send(embed=make_embed(servers), view=ManageButtons(container_names[0]), ephemeral=False)
 
 # ====== FILES / CONSTANTS ======
-DATABASE_FILE    = "database.txt"    # container_name|user_id
 ADMIN_FILE       = "admin_list.txt"  # each line: user_id
 SSH_CREDS_FILE   = "ssh_creds.txt"   # container_name|password
 SHARED_IPV4_FILE = "shared_ipv4.txt" # first line is shared IP (fallback used if missing)
