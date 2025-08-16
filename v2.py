@@ -2138,12 +2138,162 @@ async def nodes(interaction: discord.Interaction):
     container_names = [shlex.quote(line.split('|')[1]) for line in servers if '|' in line]
     await interaction.followup.send(embed=make_embed(servers), view=ManageButtons(container_names[0]), ephemeral=False)
 
-from discord import app_commands, ui
-import discord
-import docker
+# ====== FILES / CONSTANTS ======
+DATABASE_FILE    = "database.txt"    # container_name|user_id
+ADMIN_FILE       = "admin_list.txt"  # each line: user_id
+SSH_CREDS_FILE   = "ssh_creds.txt"   # container_name|password
+SHARED_IPV4_FILE = "shared_ipv4.txt" # first line is shared IP (fallback used if missing)
+DEFAULT_SHARED_IP = "45.184.85.20"
 
-docker_client = docker.from_env()
+# ====== BOT (ensure bot exists) ======
+intents = discord.Intents.default()
+bot = commands.Bot(command_prefix="!", intents=intents)
 
+# ====== HELPERS ======
+def is_admin(user_id: int) -> bool:
+    if not os.path.exists(ADMIN_FILE):
+        return False
+    with open(ADMIN_FILE, "r") as f:
+        ids = {line.strip() for line in f if line.strip()}
+    return str(user_id) in ids
+
+def add_admin(user_id: str):
+    os.makedirs(os.path.dirname(ADMIN_FILE) or ".", exist_ok=True)
+    with open(ADMIN_FILE, "a") as f:
+        f.write(f"{user_id}\n")
+
+def remove_admin(user_id: str):
+    if not os.path.exists(ADMIN_FILE): return
+    with open(ADMIN_FILE, "r") as f:
+        lines = [ln.strip() for ln in f if ln.strip()]
+    lines = [x for x in lines if x != str(user_id)]
+    with open(ADMIN_FILE, "w") as f:
+        f.write("\n".join(lines) + ("\n" if lines else ""))
+
+def list_user_vps(user_id: int):
+    """Return list of container names owned by user from database.txt"""
+    vps = []
+    if not os.path.exists(DATABASE_FILE):
+        return vps
+    with open(DATABASE_FILE, "r") as f:
+        for line in f:
+            line = line.strip()
+            if not line or "|" not in line:
+                continue
+            cname, uid = line.split("|", 1)
+            if uid == str(user_id):
+                vps.append(cname)
+    return vps
+
+def get_shared_ipv4():
+    if os.path.exists(SHARED_IPV4_FILE):
+        try:
+            with open(SHARED_IPV4_FILE, "r") as f:
+                ip = f.readline().strip()
+                if ip:
+                    return ip
+        except:
+            pass
+    return DEFAULT_SHARED_IP
+
+def save_ssh_pass(container_name: str, password: str):
+    rows = []
+    if os.path.exists(SSH_CREDS_FILE):
+        with open(SSH_CREDS_FILE, "r") as f:
+            rows = [ln.strip() for ln in f if ln.strip()]
+    found = False
+    for i, row in enumerate(rows):
+        if "|" in row:
+            cname, _ = row.split("|", 1)
+            if cname == container_name:
+                rows[i] = f"{container_name}|{password}"
+                found = True
+                break
+    if not found:
+        rows.append(f"{container_name}|{password}")
+    with open(SSH_CREDS_FILE, "w") as f:
+        f.write("\n".join(rows) + ("\n" if rows else ""))
+
+def get_ssh_pass(container_name: str) -> str:
+    if not os.path.exists(SSH_CREDS_FILE):
+        return "unknown"
+    with open(SSH_CREDS_FILE, "r") as f:
+        for line in f:
+            line = line.strip()
+            if "|" in line:
+                cname, pwd = line.split("|", 1)
+                if cname == container_name:
+                    return pwd or "unknown"
+    return "unknown"
+
+def fmt_gb(bytes_val: int) -> str:
+    return f"{bytes_val / (1024**3):.2f} GB"
+
+def get_node_uptime():
+    try:
+        with open("/proc/uptime", "r") as f:
+            s = float(f.read().split()[0])
+        # return as human friendly
+        mins, sec = divmod(int(s), 60)
+        hours, mins = divmod(mins, 60)
+        days, hours = divmod(hours, 24)
+        parts = []
+        if days: parts.append(f"{days}d")
+        if hours: parts.append(f"{hours}h")
+        if mins: parts.append(f"{mins}m")
+        parts.append(f"{sec}s")
+        return " ".join(parts)
+    except:
+        return "unknown"
+
+def get_total_ram_gb():
+    try:
+        with open("/proc/meminfo", "r") as f:
+            for line in f:
+                if line.startswith("MemTotal:"):
+                    kb = int(line.split()[1])
+                    return f"{kb/1024/1024:.2f} GB"
+    except:
+        pass
+    return "unknown"
+
+def get_total_cpu():
+    try:
+        return f"{os.cpu_count()} Cores"
+    except:
+        return "unknown"
+
+def get_total_disk_gb():
+    try:
+        total, used, free = shutil.disk_usage("/")
+        return f"{total/(1024**3):.2f} GB"
+    except:
+        return "unknown"
+
+def docker_ok():
+    return docker_client is not None and docker is not None
+
+def container_stats(container_name: str):
+    """Return (status_text, color, ram_gb, cpu_cores, disk_txt, ip)"""
+    if not docker_ok():
+        return ("🔴 Docker Unavailable", discord.Color.red(), "unknown", "unknown", "unknown", "0.0.0.0")
+    try:
+        c = docker_client.containers.get(container_name)
+        status = "🟢 Online" if c.status == "running" else "🔴 Offline"
+        color = discord.Color.green() if c.status == "running" else discord.Color.red()
+        # HostConfig Memory/NanoCpus may be 0 if unlimited
+        mem = c.attrs["HostConfig"].get("Memory", 0)
+        ram = f"{mem/(1024**3):.2f} GB" if mem else "unlimited"
+        nano = c.attrs["HostConfig"].get("NanoCpus", 0)
+        cpu = f"{nano/1e9:.2f} Cores" if nano else "unlimited"
+        # disk tracking not native; show 'N/A' (customize if you track)
+        disk = "N/A"
+        ip = c.attrs["NetworkSettings"].get("IPAddress") or "0.0.0.0"
+        return (status, color, ram, cpu, disk, ip)
+    except Exception as e:
+        return (f"❌ {e}", discord.Color.red(), "unknown", "unknown", "unknown", "0.0.0.0")
+
+# ====== /manage VIEW ======
 class ManageVPSView(ui.View):
     def __init__(self, container_name: str, owner_id: int):
         super().__init__(timeout=None)
@@ -2152,124 +2302,244 @@ class ManageVPSView(ui.View):
 
     async def interaction_check(self, interaction: discord.Interaction) -> bool:
         if interaction.user.id != self.owner_id:
-            await interaction.response.send_message("❌ You do not own this VPS!", ephemeral=True)
+            await interaction.response.send_message("❌ You do not own this VPS.", ephemeral=True)
             return False
         return True
 
+    def _container(self):
+        if not docker_ok():
+            raise RuntimeError("Docker not available")
+        return docker_client.containers.get(self.container_name)
+
+    async def _send_status_embed(self, interaction: discord.Interaction, edit: bool = True):
+        status, color, ram, cpu, disk, ip = container_stats(self.container_name)
+        ssh_pass = get_ssh_pass(self.container_name)
+        desc = (
+            f"**Status:** {status}\n"
+            f"**RAM:** {ram}\n"
+            f"**CPU:** {cpu}\n"
+            f"**Disk:** {disk}\n"
+            f"**IP:** `{ip}`\n"
+        )
+        embed = discord.Embed(
+            title=f"⚙ VPS Manager — {self.container_name}",
+            description=desc,
+            color=color
+        )
+        if edit:
+            await interaction.response.edit_message(embed=embed, view=self)
+        else:
+            await interaction.response.send_message(embed=embed, view=self, ephemeral=True)
+
     @ui.button(label="Start", style=discord.ButtonStyle.success)
-    async def start_vps(self, interaction: discord.Interaction, button: ui.Button):
+    async def btn_start(self, interaction: discord.Interaction, _: ui.Button):
         try:
-            docker_client.containers.get(self.container_name).start()
-            await interaction.response.send_message(f"✅ VPS `{self.container_name}` started!", ephemeral=True)
+            self._container().start()
+            await interaction.response.send_message(f"✅ Started `{self.container_name}`", ephemeral=True)
         except Exception as e:
-            await interaction.response.send_message(f"❌ Error starting VPS: {e}", ephemeral=True)
+            await interaction.response.send_message(f"❌ {e}", ephemeral=True)
 
     @ui.button(label="Stop", style=discord.ButtonStyle.danger)
-    async def stop_vps(self, interaction: discord.Interaction, button: ui.Button):
+    async def btn_stop(self, interaction: discord.Interaction, _: ui.Button):
         try:
-            docker_client.containers.get(self.container_name).stop()
-            await interaction.response.send_message(f"🛑 VPS `{self.container_name}` stopped!", ephemeral=True)
+            self._container().stop()
+            await interaction.response.send_message(f"🛑 Stopped `{self.container_name}`", ephemeral=True)
         except Exception as e:
-            await interaction.response.send_message(f"❌ Error stopping VPS: {e}", ephemeral=True)
+            await interaction.response.send_message(f"❌ {e}", ephemeral=True)
 
     @ui.button(label="Restart", style=discord.ButtonStyle.primary)
-    async def restart_vps(self, interaction: discord.Interaction, button: ui.Button):
+    async def btn_restart(self, interaction: discord.Interaction, _: ui.Button):
         try:
-            docker_client.containers.get(self.container_name).restart()
-            await interaction.response.send_message(f"🔄 VPS `{self.container_name}` restarted!", ephemeral=True)
+            self._container().restart()
+            await interaction.response.send_message(f"🔄 Restarted `{self.container_name}`", ephemeral=True)
         except Exception as e:
-            await interaction.response.send_message(f"❌ Error restarting VPS: {e}", ephemeral=True)
+            await interaction.response.send_message(f"❌ {e}", ephemeral=True)
 
     @ui.button(label="Regenerate SSH", style=discord.ButtonStyle.secondary)
-    async def regenerate_ssh(self, interaction: discord.Interaction, button: ui.Button):
+    async def btn_regen_ssh(self, interaction: discord.Interaction, _: ui.Button):
         try:
-            container = docker_client.containers.get(self.container_name)
-            new_pass = "Pass" + str(discord.utils.utcnow().timestamp())[-6:]
-            container.exec_run(f"echo 'root:{new_pass}' | chpasswd")
-            ip = container.attrs['NetworkSettings']['IPAddress']
-            port = 22
+            c = self._container()
+            # simple password generator
+            new_pass = f"Root{int(time.time())%1000000:06d}"
+            # set root password inside container (requires chpasswd & root)
+            c.exec_run(f"bash -lc \"echo 'root:{new_pass}' | chpasswd\"")
+            save_ssh_pass(self.container_name, new_pass)
+            ip = c.attrs['NetworkSettings'].get('IPAddress') or get_shared_ipv4()
             await interaction.user.send(
-                f"🔑 **New SSH Info for {self.container_name}:**\n```ssh root@{ip} -p {port}\nPassword: {new_pass}```"
+                f"🔑 **New SSH for `{self.container_name}`**\n"
+                f"```ssh root@{ip} -p 22\nPassword: {new_pass}```"
             )
-            await interaction.response.send_message("✅ SSH password regenerated and sent to DM!", ephemeral=True)
+            await interaction.response.send_message("✅ New SSH sent in DM.", ephemeral=True)
         except Exception as e:
-            await interaction.response.send_message(f"❌ Error regenerating SSH: {e}", ephemeral=True)
+            await interaction.response.send_message(f"❌ {e}", ephemeral=True)
 
     @ui.button(label="Get SSH Info", style=discord.ButtonStyle.blurple)
-    async def ssh_info(self, interaction: discord.Interaction, button: ui.Button):
+    async def btn_get_ssh(self, interaction: discord.Interaction, _: ui.Button):
         try:
-            container = docker_client.containers.get(self.container_name)
-            ip = container.attrs['NetworkSettings']['IPAddress']
-            port = 22
-            ssh_pass = "StoredOrGeneratedPass"  # <-- yahan tumhare /deploy ka password variable lagana hai
-            await interaction.response.send_message(
-                f"📡 **SSH Command:**\n```ssh root@{ip} -p {port}\nPassword: {ssh_pass}```",
-                ephemeral=True
+            c = self._container()
+            ip = c.attrs['NetworkSettings'].get('IPAddress') or get_shared_ipv4()
+            pwd = get_ssh_pass(self.container_name)
+            msg = (
+                "📡 **SSH Info**\n"
+                f"```ssh root@{ip} -p 22\nPassword: {pwd}```"
             )
+            await interaction.response.send_message(msg, ephemeral=True)
         except Exception as e:
-            await interaction.response.send_message(f"❌ Error fetching SSH info: {e}", ephemeral=True)
+            await interaction.response.send_message(f"❌ {e}", ephemeral=True)
 
-@bot.tree.command(name="manage", description="Manage your VPS")
+    @ui.button(label="Refresh Status", style=discord.ButtonStyle.gray)
+    async def btn_refresh(self, interaction: discord.Interaction, _: ui.Button):
+        try:
+            await self._send_status_embed(interaction, edit=True)
+        except Exception as e:
+            await interaction.response.send_message(f"❌ {e}", ephemeral=True)
+
+# ====== /manage COMMAND ======
+@bot.tree.command(name="manage", description="Manage your VPS (owner-only controls)")
 async def manage(interaction: discord.Interaction):
+    # prevent “application did not respond”
     await interaction.response.defer(ephemeral=True)
 
-    user_id = str(interaction.user.id)
-    owned_vps = []
-
-    try:
-        with open("database.txt", "r") as f:
-            for line in f:
-                data = line.strip().split("|")
-                if data[1] == user_id:
-                    owned_vps.append(data[0])
-    except FileNotFoundError:
-        pass
-
-    if not owned_vps:
+    owned = list_user_vps(interaction.user.id)
+    if not owned:
         await interaction.followup.send("❌ You have no VPS linked to your account.", ephemeral=True)
         return
 
-    if len(owned_vps) == 1:
-        container_name = owned_vps[0]
-        container = docker_client.containers.get(container_name)
-        status = "🟢 Online" if container.status == "running" else "🔴 Offline"
-        ram = container.attrs["HostConfig"]["Memory"] // (1024**3)
-        cpu = container.attrs["HostConfig"]["NanoCpus"] / 1e9
-        disk = "Unknown"
-
+    # Single VPS -> show directly
+    if len(owned) == 1:
+        cname = owned[0]
+        status, color, ram, cpu, disk, ip = container_stats(cname)
         embed = discord.Embed(
-            title=f"⚙ VPS Manager — {container_name}",
-            description=f"**Status:** {status}\n**RAM:** {ram} GB\n**CPU:** {cpu} Cores\n**Disk:** {disk}",
-            color=discord.Color.green() if container.status == "running" else discord.Color.red()
+            title=f"⚙ VPS Manager — {cname}",
+            description=f"**Status:** {status}\n**RAM:** {ram}\n**CPU:** {cpu}\n**Disk:** {disk}\n**IP:** `{ip}`",
+            color=color
         )
-        await interaction.followup.send(embed=embed, view=ManageVPSView(container_name, interaction.user.id), ephemeral=True)
+        await interaction.followup.send(embed=embed, view=ManageVPSView(cname, interaction.user.id), ephemeral=True)
+        return
 
+    # Multiple VPS -> Select menu
+    options = [discord.SelectOption(label=name, value=name) for name in owned]
+
+    class VPSSelect(ui.Select):
+        def __init__(self):
+            super().__init__(placeholder="Select Your VPS", options=options, min_values=1, max_values=1)
+
+        async def callback(self, select_inter: discord.Interaction):
+            cname = self.values[0]
+            status, color, ram, cpu, disk, ip = container_stats(cname)
+            embed = discord.Embed(
+                title=f"⚙ VPS Manager — {cname}",
+                description=f"**Status:** {status}\n**RAM:** {ram}\n**CPU:** {cpu}\n**Disk:** {disk}\n**IP:** `{ip}`",
+                color=color
+            )
+            await select_inter.response.send_message(
+                embed=embed,
+                view=ManageVPSView(cname, interaction.user.id),
+                ephemeral=True
+            )
+
+    class VPSSelectView(ui.View):
+        def __init__(self):
+            super().__init__(timeout=None)
+            self.add_item(VPSSelect())
+
+    await interaction.followup.send("📌 Select Your VPS:", view=VPSSelectView(), ephemeral=True)
+
+# ====== /addadmin_bot (ADMIN PANEL) ======
+class AdminUserModal(ui.Modal, title="Admin User ID"):
+    action: str
+
+    def __init__(self, action: str):
+        super().__init__(timeout=None)
+        self.action = action
+        self.user_id_input = ui.TextInput(label="Discord User ID", placeholder="e.g. 123456789012345678", required=True)
+        self.add_item(self.user_id_input)
+
+    async def on_submit(self, interaction: discord.Interaction):
+        if not is_admin(interaction.user.id):
+            await interaction.response.send_message("❌ Admins only.", ephemeral=True)
+            return
+        uid = self.user_id_input.value.strip()
+        if self.action == "add":
+            add_admin(uid)
+            await interaction.response.send_message(f"✅ Added <@{uid}> to admin list.", ephemeral=True)
+        else:
+            remove_admin(uid)
+            await interaction.response.send_message(f"🗑️ Removed <@{uid}> from admin list.", ephemeral=True)
+
+class AdminPanelView(ui.View):
+    def __init__(self, invoker_id: int):
+        super().__init__(timeout=None)
+        self.invoker_id = invoker_id
+
+    async def interaction_check(self, interaction: discord.Interaction) -> bool:
+        if interaction.user.id != self.invoker_id:
+            await interaction.response.send_message("❌ This panel isn’t for you.", ephemeral=True)
+            return False
+        if not is_admin(self.invoker_id):
+            await interaction.response.send_message("❌ Admins only.", ephemeral=True)
+            return False
+        return True
+
+    @ui.select(
+        placeholder="Select Action",
+        options=[
+            discord.SelectOption(label="Add Admin", value="add"),
+            discord.SelectOption(label="Remove Admin", value="remove"),
+        ],
+        min_values=1, max_values=1
+    )
+    async def select_action(self, interaction: discord.Interaction, select: ui.Select):
+        action = select.values[0]
+        await interaction.response.send_modal(AdminUserModal(action=action))
+
+@bot.tree.command(name="addadmin_bot", description="Admin panel: Add/Remove bot admins (admin only)")
+async def addadmin_bot_cmd(interaction: discord.Interaction):
+    if not is_admin(interaction.user.id):
+        await interaction.response.send_message("❌ Admins only.", ephemeral=True)
+        return
+    await interaction.response.send_message("🔐 Admin Panel", view=AdminPanelView(interaction.user.id), ephemeral=True)
+
+# ====== /status COMMAND ======
+@bot.tree.command(name="status", description="LD NODE VM status")
+async def status_cmd(interaction: discord.Interaction):
+    await interaction.response.defer(ephemeral=True)
+
+    ip = get_shared_ipv4()
+    uptime = get_node_uptime()
+    ram_total = get_total_ram_gb()
+    cpu_total = get_total_cpu()
+    disk_total = get_total_disk_gb()
+
+    vm_total = 0
+    running = 0
+    online_str = "🟢 Online"
+    if docker_ok():
+        try:
+            allc = docker_client.containers.list(all=True)
+            vm_total = len(allc)
+            running = len([c for c in allc if c.status == "running"])
+        except Exception:
+            pass
     else:
-        options = [discord.SelectOption(label=name, value=name) for name in owned_vps]
+        online_str = "🔴 Offline (Docker)"
 
-        class VPSSelect(ui.Select):
-            def __init__(self):
-                super().__init__(placeholder="Select your VPS...", options=options)
-
-            async def callback(self, select_interaction: discord.Interaction):
-                container_name = self.values[0]
-                container = docker_client.containers.get(container_name)
-                status = "🟢 Online" if container.status == "running" else "🔴 Offline"
-                ram = container.attrs["HostConfig"]["Memory"] // (1024**3)
-                cpu = container.attrs["HostConfig"]["NanoCpus"] / 1e9
-                disk = "Unknown"
-                embed = discord.Embed(
-                    title=f"⚙ VPS Manager — {container_name}",
-                    description=f"**Status:** {status}\n**RAM:** {ram} GB\n**CPU:** {cpu} Cores\n**Disk:** {disk}",
-                    color=discord.Color.green() if container.status == "running" else discord.Color.red()
-                )
-                await select_interaction.response.send_message(embed=embed, view=ManageVPSView(container_name, interaction.user.id), ephemeral=True)
-
-        class VPSSelectView(ui.View):
-            def __init__(self):
-                super().__init__(timeout=None)
-                self.add_item(VPSSelect())
-
-        await interaction.followup.send("📌 Select a VPS to manage:", view=VPSSelectView(), ephemeral=True)
+    embed = discord.Embed(
+        title="LD NODE VM",
+        description=(
+            f"**Node:** {online_str}\n"
+            f"**Up:** {uptime}\n"
+            f"**VM Total:** {vm_total}\n"
+            f"**Running VM (Node):** {running}\n"
+            f"**Total RAM:** {ram_total}\n"
+            f"**Total CPU:** {cpu_total}\n"
+            f"**Total Disk:** {disk_total}\n\n"
+            f"**Shared IPv4 VPS IP Status:** Online\n"
+            f"**Ip = {ip}**"
+        ),
+        color=discord.Color.green() if "Online" in online_str else discord.Color.red()
+    )
+    embed.set_footer(text="Made by Gamerzhacker")
+    await interaction.followup.send(embed=embed, ephemeral=True)
 
 bot.run(TOKEN)
