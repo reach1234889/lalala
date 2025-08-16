@@ -1926,10 +1926,6 @@ SSH_CREDS_FILE   = "ssh_creds.txt"   # container_name|password
 SHARED_IPV4_FILE = "shared_ipv4.txt" # first line is shared IP (fallback used if missing)
 DEFAULT_SHARED_IP = "45.184.85.20"
 
-# ====== BOT (ensure bot exists) ======
-intents = discord.Intents.default()
-bot = commands.Bot(command_prefix="!", intents=intents)
-
 # ====== HELPERS ======
 def is_admin(user_id: int) -> bool:
     if not os.path.exists(ADMIN_FILE):
@@ -2306,7 +2302,7 @@ async def status_cmd(interaction: discord.Interaction):
         online_str = "🔴 Offline (Docker)"
 
     embed = discord.Embed(
-        title="LD NODE VM",
+        title="LD NODE VM 24/7 Online ",
         description=(
             f"**Node:** {online_str}\n"
             f"**Up:** {uptime}\n"
