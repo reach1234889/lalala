@@ -2277,7 +2277,63 @@ async def addadmin_bot_cmd(interaction: discord.Interaction):
         return
     await interaction.response.send_message("🔐 Admin Panel", view=AdminPanelView(interaction.user.id), ephemeral=True)
 
-# ====== /status COMMAND ======
+
+@bot.tree.command(name="vmuptime", description="Show VPS uptime and system resources")
+async def vmuptime(interaction: discord.Interaction):
+    await interaction.response.defer(ephemeral=True)
+
+    uptime = get_node_uptime()
+    cpu_percent = psutil.cpu_percent(interval=1)
+    ram = psutil.virtual_memory()
+    disk = psutil.disk_usage("/")
+
+    embed = discord.Embed(
+        title="📈 VPS Uptime & Resources",
+        description=(
+            f"**Uptime:** {uptime}\n"
+            f"**CPU Load:** {cpu_percent}%\n"
+            f"**RAM Used:** {ram.percent}% ({ram.used//1024//1024}MB/{ram.total//1024//1024}MB)\n"
+            f"**Disk Used:** {disk.percent}% ({disk.used//1024//1024}MB/{disk.total//1024//1024}MB)"
+        ),
+        color=discord.Color.green()
+    )
+    await interaction.followup.send(embed=embed, ephemeral=True)
+
+@bot.tree.command(name="serverinfo", description="Show this server's information")
+async def serverinfo(interaction: discord.Interaction):
+    guild = interaction.guild
+    if not guild:
+        await interaction.response.send_message("❌ This command can only be used in a server.", ephemeral=True)
+        return
+
+    embed = discord.Embed(
+        title=f"📊 Server Info — {guild.name}",
+        description=f"**Owner:** <@{guild.owner_id}>\n**Owner ID:** {guild.owner_id}\n"
+                    f"**Members:** {guild.member_count}\n"
+                    f"**Bot Version:** 12.8",
+        color=discord.Color.blue()
+    )
+    embed.set_footer(text="Made by Gamerzhacker1")
+    await interaction.response.send_message(embed=embed, ephemeral=True)
+
+@bot.tree.command(name="newmessage", description="Send a message to a channel (Admin only)")
+@app_commands.describe(channelid="Channel ID", text="Message to send")
+async def newmessage(interaction: discord.Interaction, channelid: str, text: str):
+    if not is_admin(interaction.user.id):
+        await interaction.response.send_message("❌ Admins only.", ephemeral=True)
+        return
+
+    channel = bot.get_channel(int(channelid))
+    if not channel:
+        await interaction.response.send_message("❌ Channel not found.", ephemeral=True)
+        return
+
+    try:
+        await channel.send(text)
+        await interaction.response.send_message(f"✅ Message sent to <#{channelid}>", ephemeral=True)
+    except Exception as e:
+        await interaction.response.send_message(f"❌ Failed: {e}", ephemeral=True)
+
 @bot.tree.command(name="status", description="LD NODE VM status")
 async def status_cmd(interaction: discord.Interaction):
     await interaction.response.defer(ephemeral=True)
@@ -2302,7 +2358,7 @@ async def status_cmd(interaction: discord.Interaction):
         online_str = "🔴 Offline (Docker)"
 
     embed = discord.Embed(
-        title="LD NODE VM 24/7 Online ",
+        title="LD NODE VM",
         description=(
             f"**Node:** {online_str}\n"
             f"**Up:** {uptime}\n"
