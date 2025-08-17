@@ -327,7 +327,7 @@ async def on_ready():
             await bot.change_presence(
                 activity=discord.Activity(
                     type=discord.ActivityType.watching,
-                    name=f"Create Vm | Total: {count} | Gamerzhacker"
+                    name=f"created Vm | Total: {count} | DXF_PLAYZ"
                 )
             )
             await asyncio.sleep(300)  # update every 5 mins
@@ -2335,7 +2335,7 @@ async def newmessage(interaction: discord.Interaction, channelid: str, text: str
     except Exception as e:
         await interaction.response.send_message(f"❌ Failed: {e}", ephemeral=True)
 
-@bot.tree.command(name="status", description="LD NODE VM status")
+@bot.tree.command(name="status", description=" VM status")
 async def status_cmd(interaction: discord.Interaction):
     await interaction.response.defer(ephemeral=True)
 
