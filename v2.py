@@ -3,7 +3,7 @@ import logging
 import subprocess
 import sys
 import os
-import re gg
+import re 
 import time
 import shlex
 import concurrent.futures
@@ -11,6 +11,7 @@ import discord
 from discord.ext import commands, tasks
 import docker
 import asyncio
+import psutil
 from discord import app_commands, ui
 from discord.ui import Button, View, Select
 import string 
@@ -326,7 +327,7 @@ async def on_ready():
             await bot.change_presence(
                 activity=discord.Activity(
                     type=discord.ActivityType.watching,
-                    name=f"VPS Deploy | Total: {count} | Gamerzhacker"
+                    name=f"Create Vm | Total: {count} | Gamerzhacker"
                 )
             )
             await asyncio.sleep(300)  # update every 5 mins
@@ -2220,8 +2221,8 @@ async def manage(interaction: discord.Interaction):
             super().__init__(timeout=None)
             self.add_item(VPSSelect())
 
-    await interaction.followup.send("📌 Select Your VPS:", view=VPSSelectView(), ephemeral=True)
-
+    await interaction.response.defer(ephemeral=True)
+    
 # ====== /addadmin_bot (ADMIN PANEL) ======
 class AdminUserModal(ui.Modal, title="Admin User ID"):
     action: str
