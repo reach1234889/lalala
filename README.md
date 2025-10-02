@@ -1,5 +1,9 @@
 ```
-git clone https://github.com/ogitzdude/ms-v4
+git clone https://github.com/iamdragonboy/LITEXDRAGONXVPS
+```
+
+```
+cd LITEXDRAGONXVPS
 ```
 
 ```
