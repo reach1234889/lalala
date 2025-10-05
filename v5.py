@@ -1394,7 +1394,7 @@ class RewardSelect(discord.ui.Select):
         if value == "invite_3" and not await has_required_invites(user, 3):
             await interaction.response.send_message("❌ You need at least 3 invites to claim this reward.", ephemeral=True)
             return
-        elif value == "invite_8"" and not await has_required_invites(user, 8):
+        elif value == "invite_8" and not await has_required_invites(user, 8):
             ram = 32000
             await interaction.response.send_message("❌ You need at least 8 invites to claim this reward.", ephemeral=True)
             return
