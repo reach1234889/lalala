@@ -327,7 +327,7 @@ async def on_ready():
             await bot.change_presence(
                 activity=discord.Activity(
                     type=discord.ActivityType.watching,
-                    name=f"created Vm | Total: {count} | DXF_PLAYZ"
+                    name=f"created Vm | Total: {count} | AMD-X7 VPS"
                 )
             )
             await asyncio.sleep(300)  # update every 5 mins
