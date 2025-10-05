@@ -1,9 +1,9 @@
 ```
-git clone https://github.com/iamdragonboy/LITEXDRAGONXVPS
+git clone https://github.com/reach1234889/lalala.git
 ```
 
 ```
-cd LITEXDRAGONXVPS
+cd lalala
 ```
 
 ```
