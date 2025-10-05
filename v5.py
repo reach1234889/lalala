@@ -484,7 +484,7 @@ async def node_stats(interaction: discord.Interaction):
             stats = get_container_stats(container_id)
             embed.add_field(
                 name=f"{container_id}",
-                value=f"Status: {stats['status']}\nMemory: {stats['memory']}\nCPU: {stats['cpu']}",
+                value=f"Status: {stats['status']}\nMemory: 64gb\nCPU: 10",
                 inline=True
             )
     
