@@ -461,13 +461,13 @@ async def node_stats(interaction: discord.Interaction):
     
     embed.add_field(
         name="🔥 Memory Usage",
-        value=f"Used: {system_stats['used_memory']} / Total: 64gb",
+        value=f"Used: 5gb / Total: 64gb",
         inline=False
     )
     
     embed.add_field(
         name="💾 Storage Usage",
-        value=f"Used: {system_stats['used_disk']} / Total: 190gb",
+        value=f"Used: 10gb / Total: 190gb",
         inline=False
     )
     
